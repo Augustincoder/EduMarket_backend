@@ -1,0 +1,161 @@
+// src/app.js
+// Express application factory.
+// No app.listen() here — that lives in server.js.
+// This pattern makes testing easy (import app without starting the server).
+
+const express = require('express');
+const helmet = require('helmet');
+const cors = require('cors');
+const cookieParser = require('cookie-parser');
+const compression = require('compression');
+const morgan = require('morgan');
+
+const env = require('./config/env');
+const logger = require('./utils/logger');
+const { errorHandler, AppError } = require('./middleware/errorHandler');
+const { globalRateLimiter } = require('./middleware/rateLimiter');
+const prisma = require('./config/prisma');
+
+// Routers
+const authRouter = require('./modules/auth/auth.router');
+const taskRouter = require('./modules/task/task.router');
+const bidRouter = require('./modules/bid/bid.router');
+const chatRouter = require('./modules/chat/chat.router');
+const fileRouter = require('./modules/file/file.router');
+const reviewRouter = require('./modules/review/review.router');
+const vipRouter = require('./modules/vip/vip.router');
+const adminRouter = require('./modules/admin/admin.router');
+const webhookRouter = require('./routes/webhook.router');
+const profileRouter = require('./modules/profile/profile.router');
+const analyticsRouter = require('./modules/analytics/analytics.router');
+const portfolioRouter = require('./modules/portfolio/portfolio.router');
+const gigRouter = require('./modules/gig/gig.router');
+
+// ─── CORS config ──────────────────────────────────────────────────────────────
+// Telegram Mini Apps run in an iframe — browsers treat them as cross-origin.
+// SameSite=None cookies require HTTPS (handled by Nginx in production).
+const ALWAYS_ALLOWED = [
+  'https://web.telegram.org',
+  'https://telegram.org',
+  'https://webk.telegram.org',
+  'https://webz.telegram.org',
+];
+
+// Allow custom origins from env + always-allowed list
+const allowedOrigins = [
+  ...ALWAYS_ALLOWED,
+  ...env.ALLOWED_ORIGINS,
+  ...(env.isDev ? ['http://localhost:5173', 'http://localhost:3000'] : []),
+];
+
+const corsOptions = {
+  origin: (origin, callback) => {
+    // Allow requests with no origin (mobile apps, curl, Postman)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    callback(new Error(`CORS: '${origin}' manziliga ruxsat yo'q`));
+  },
+  credentials: true, // Required for cookies
+  methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Telegram-Bot-Api-Secret-Token'],
+};
+
+// ─── App factory ──────────────────────────────────────────────────────────────
+function createApp() {
+  const app = express();
+
+  // ── Trust proxy (required when behind Nginx) ──────────────────────────────
+  // Allows correct IP extraction via req.ip (not Nginx's IP)
+  app.set('trust proxy', 1);
+
+  // ── Security headers (helmet) ─────────────────────────────────────────────
+  app.use(
+    helmet({
+      crossOriginEmbedderPolicy: false, // Required for Telegram Mini App
+      contentSecurityPolicy: env.isProd, // Enable CSP only in production
+    })
+  );
+
+  // ── CORS ──────────────────────────────────────────────────────────────────
+  app.use(cors(corsOptions));
+  app.options('*', cors(corsOptions)); // Preflight for all routes
+
+  // ── Compression ───────────────────────────────────────────────────────────
+  // Gzip/Brotli response compression (skip small responses <1KB)
+  app.use(compression({ threshold: 1024 }));
+
+  // ── HTTP Request logging ──────────────────────────────────────────────────
+  if (env.isDev) {
+    app.use(morgan('dev'));
+  } else {
+    // Production: structured log via Winston stream
+    app.use(
+      morgan('combined', {
+        stream: { write: (msg) => logger.http(msg.trim()) },
+        skip: (req) => req.path === '/health', // Don't log health checks
+      })
+    );
+  }
+
+  // ── Body parsing ──────────────────────────────────────────────────────────
+  app.use(express.json({ limit: '20mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '20mb' }));
+
+  // ── Cookie parsing ────────────────────────────────────────────────────────
+  app.use(cookieParser());
+
+  // ── Global rate limiting ──────────────────────────────────────────────────
+  app.use(globalRateLimiter);
+
+  // ─── Health check ─────────────────────────────────────────────────────────
+  app.get('/health', async (req, res) => {
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+      res.json({
+        status: 'ok',
+        ts: Date.now(),
+        uptime: Math.floor(process.uptime()),
+        db: 'connected',
+        env: env.NODE_ENV,
+      });
+    } catch (err) {
+      logger.error('Health check failed:', err.message);
+      res.status(503).json({
+        status: 'error',
+        ts: Date.now(),
+        db: 'disconnected',
+        error: 'Ma\'lumotlar bazasiga ulanib bo\'lmadi',
+      });
+    }
+  });
+
+  // ─── API v1 Routes ────────────────────────────────────────────────────────
+  // All API routes are versioned from day 1
+  app.use('/api/v1/auth', authRouter);
+  app.use('/api/v1/tasks', taskRouter);
+  app.use('/api/v1/bids', bidRouter);
+  app.use('/api/v1/chat', chatRouter);
+  app.use('/api/v1/files', fileRouter);
+  app.use('/api/v1/reviews', reviewRouter);
+  app.use('/api/v1/vip', vipRouter);
+  app.use('/api/v1/admin', adminRouter);
+  app.use('/api/v1/users', profileRouter);
+  app.use('/api/v1/analytics', analyticsRouter);
+  app.use('/api/v1/portfolio', portfolioRouter);
+  app.use('/api/v1/gigs', gigRouter);
+
+  // Telegram webhook (not under /api/v1 — Telegram calls this directly)
+  if (webhookRouter) app.use('/webhook', webhookRouter);
+
+  // ─── 404 handler ──────────────────────────────────────────────────────────
+  app.all('*', (req, res, next) => {
+    next(new AppError(`Topilmadi: ${req.originalUrl}`, 404, 'ROUTE_NOT_FOUND'));
+  });
+
+  // ─── Global error handler (MUST be last) ──────────────────────────────────
+  app.use(errorHandler);
+
+  return app;
+}
+
+module.exports = createApp;

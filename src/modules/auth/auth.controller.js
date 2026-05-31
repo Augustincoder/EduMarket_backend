@@ -1,0 +1,71 @@
+const authService = require('./auth.service');
+const { blacklistToken } = require('../../utils/tokenBlacklist');
+
+/**
+ * Login user via Telegram initData
+ */
+async function login(req, res) {
+  const { initData, referralCode } = req.body;
+  const ipAddress = req.ip;
+
+  const { user, token } = await authService.loginWithTelegram(initData, ipAddress, referralCode);
+
+  // Set JWT as HttpOnly cookie (more secure against XSS)
+  res.cookie('token', token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'none', // Required for cross-origin TMA
+    maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+  });
+
+  res.json({
+    success: true,
+    message: 'Tizimga muvaffaqiyatli kirdingiz',
+    data: {
+      user,
+      token // Also send token in body for mobile clients that don't support cookies well
+    }
+  });
+}
+
+/**
+ * Logout user by blacklisting their token and clearing cookie
+ */
+async function logout(req, res) {
+  // Add token's jti to blacklist
+  if (req.jti) {
+    blacklistToken(req.jti);
+  }
+
+  // Clear cookie
+  res.clearCookie('token', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'none'
+  });
+
+  res.json({
+    success: true,
+    message: 'Tizimdan muvaffaqiyatli chiqdingiz'
+  });
+}
+
+/**
+ * Get current logged in user's session status
+ */
+async function me(req, res) {
+  // req.user is populated by requireAuth middleware
+  res.json({
+    success: true,
+    data: {
+      userId: req.user.userId,
+      role: req.user.role
+    }
+  });
+}
+
+module.exports = {
+  login,
+  logout,
+  me
+};

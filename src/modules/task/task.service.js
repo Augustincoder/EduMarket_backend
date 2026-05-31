@@ -1,0 +1,268 @@
+const prisma = require('../../config/prisma');
+const { AppError } = require('../../middleware/errorHandler');
+const { TASK_STATUS, validateTransition } = require('./task.stateMachine');
+const notificationService = require('../notification/notification.service');
+
+/**
+ * Creates a new task
+ */
+async function createTask(clientId, data) {
+  // Phase 14: Calculate rush fee if urgent (e.g. 20% premium logic could go here)
+  const rushFee = data.isUrgent ? Math.floor(data.priceMin * 0.2) : 0;
+  
+  const task = await prisma.task.create({
+    data: {
+      clientId,
+      category: data.category,
+      title: data.title,
+      description: data.description,
+      priceMin: data.priceMin,
+      priceMax: data.priceMax,
+      deadline: new Date(data.deadline),
+      attachmentFileIds: data.attachmentFileIds || [],
+      status: TASK_STATUS.OPEN,
+      isUrgent: data.isUrgent,
+      rushFee
+    }
+  });
+
+  // Phase 14: Smart Matching logic (EduMarket V2)
+  // Find VIP freelancers who have this category in their skills
+  const matchedVips = await prisma.user.findMany({
+    where: {
+      isVip: true,
+      skills: {
+        has: data.category
+      }
+    },
+    select: { id: true, telegramId: true }
+  });
+
+  // Send notifications asynchronously so we don't block the API response
+  Promise.all(
+    matchedVips.map(freelancer => 
+      notificationService.smartMatchNotify(freelancer, task)
+    )
+  ).catch(err => console.error('Smart match notification error:', err));
+
+  return task;
+}
+
+/**
+ * Get task by ID
+ */
+async function getTaskById(id) {
+  const task = await prisma.task.findUnique({
+    where: { id },
+    include: {
+      client: {
+        select: {
+          id: true,
+          fullname: true,
+          avatarUrl: true,
+          ratingSum: true,
+          ratingCount: true,
+          isVip: true,
+          badge: true
+        }
+      },
+      freelancer: {
+        select: {
+          id: true,
+          fullname: true,
+          avatarUrl: true,
+          ratingSum: true,
+          ratingCount: true,
+          isVip: true,
+          badge: true
+        }
+      },
+      // Include accepted bid if any
+      bids: {
+        where: { isAccepted: true },
+        select: { id: true, proposedPrice: true, message: true }
+      }
+    }
+  });
+
+  if (!task || task.deletedAt) {
+    throw new AppError('Vazifa topilmadi', 404, 'TASK_NOT_FOUND');
+  }
+
+  return task;
+}
+
+/**
+ * List tasks using cursor-based pagination (Phase 13 improvement)
+ */
+async function listTasks(filters) {
+  const { cursor, limit, category, status, query, minPrice, maxPrice } = filters;
+
+  // Build where clause
+  const where = {
+    deletedAt: null, // Soft delete filter
+  };
+
+  if (category) where.category = category;
+  if (status) where.status = status;
+  if (minPrice || maxPrice) {
+    where.priceMin = {};
+    if (minPrice) where.priceMin.gte = minPrice;
+    if (maxPrice) where.priceMax = { lte: maxPrice };
+  }
+  
+  // Phase 14: Full-text search placeholder (LIKE query for now, upgrade to tsvector later)
+  if (query) {
+    where.OR = [
+      { title: { contains: query, mode: 'insensitive' } },
+      { description: { contains: query, mode: 'insensitive' } }
+    ];
+  }
+
+  // Cursor logic
+  if (cursor) {
+    where.id = { lt: cursor }; // 'lt' because we order by 'desc'
+  }
+
+  const tasks = await prisma.task.findMany({
+    where,
+    take: limit,
+    orderBy: { id: 'desc' },
+    include: {
+      client: {
+        select: { id: true, fullname: true, isVip: true, badge: true }
+      },
+      _count: {
+        select: { bids: true }
+      }
+    }
+  });
+
+  // Calculate next cursor
+  const nextCursor = tasks.length === limit ? tasks[tasks.length - 1].id : null;
+
+  return {
+    tasks,
+    nextCursor
+  };
+}
+
+/**
+ * Internal helper to update state with validation
+ */
+async function _changeTaskState(taskId, nextState, expectedUserId, roleStr) {
+  const task = await prisma.task.findUnique({ where: { id: taskId } });
+  if (!task) throw new AppError('Vazifa topilmadi', 404);
+
+  // Authorize
+  if (roleStr === 'CLIENT' && task.clientId !== expectedUserId) throw new AppError('Siz mijoz emassiz', 403);
+  if (roleStr === 'FREELANCER' && task.freelancerId !== expectedUserId) throw new AppError('Siz ijrochi emassiz', 403);
+  if (roleStr === 'ANY_PARTICIPANT' && task.clientId !== expectedUserId && task.freelancerId !== expectedUserId) {
+    throw new AppError('Ruxsat yo\'q', 403);
+  }
+
+  validateTransition(task.status, nextState);
+
+  const updateData = { status: nextState };
+  const now = new Date();
+  
+  switch (nextState) {
+    case TASK_STATUS.IN_PROGRESS: updateData.inProgressAt = now; break;
+    case TASK_STATUS.IN_REVIEW: updateData.inReviewAt = now; break;
+    case TASK_STATUS.COMPLETED: updateData.completedAt = now; break;
+    case TASK_STATUS.CANCELED: updateData.canceledAt = now; break;
+  }
+
+  return { 
+    updatedTask: await prisma.task.update({ where: { id: taskId }, data: updateData, include: { client: true, freelancer: true } }), 
+    oldTask: task 
+  };
+}
+
+async function startProgress(taskId, freelancerId) {
+  const { updatedTask } = await _changeTaskState(taskId, TASK_STATUS.IN_PROGRESS, freelancerId, 'FREELANCER');
+  return updatedTask;
+}
+
+async function submitForReview(taskId, freelancerId) {
+  const { updatedTask } = await _changeTaskState(taskId, TASK_STATUS.IN_REVIEW, freelancerId, 'FREELANCER');
+  return updatedTask;
+}
+
+async function acceptDelivery(taskId, clientId) {
+  const { updatedTask } = await _changeTaskState(taskId, TASK_STATUS.COMPLETED, clientId, 'CLIENT');
+  await notificationService.taskCompleted(updatedTask);
+  return updatedTask;
+}
+
+async function requestRevision(taskId, clientId, note) {
+  const { updatedTask } = await _changeTaskState(taskId, TASK_STATUS.IN_PROGRESS, clientId, 'CLIENT');
+  await notificationService.revisionRequested(updatedTask, note);
+  return updatedTask;
+}
+
+async function cancelTask(taskId, userId) {
+  const { updatedTask } = await _changeTaskState(taskId, TASK_STATUS.CANCELED, userId, 'ANY_PARTICIPANT');
+  return updatedTask;
+}
+
+async function openDispute(taskId, userId, reason) {
+  const task = await prisma.task.findUnique({ where: { id: taskId }, include: { client: true, freelancer: true } });
+  if (!task) throw new AppError('Vazifa topilmadi', 404);
+  if (task.clientId !== userId && task.freelancerId !== userId) throw new AppError('Ruxsat yo\'q', 403);
+
+  validateTransition(task.status, TASK_STATUS.DISPUTED);
+
+  return prisma.$transaction(async (tx) => {
+    const dispute = await tx.dispute.create({
+      data: {
+        taskId,
+        openedByUserId: userId,
+        reason,
+        status: 'OPEN'
+      }
+    });
+
+    const updatedTask = await tx.task.update({
+      where: { id: taskId },
+      data: { status: TASK_STATUS.DISPUTED },
+      include: { client: true, freelancer: true }
+    });
+
+    await notificationService.disputeOpened(updatedTask, dispute);
+    return { updatedTask, dispute };
+  });
+}
+
+/**
+ * Soft delete task (Client only)
+ */
+async function deleteTask(taskId, clientId) {
+  const task = await prisma.task.findUnique({ where: { id: taskId } });
+  
+  if (!task) throw new AppError('Vazifa topilmadi', 404);
+  if (task.clientId !== clientId) throw new AppError('Ruxsat yo\'q', 403);
+  
+  // Can only delete if OPEN or CANCELED
+  if (task.status !== TASK_STATUS.OPEN && task.status !== TASK_STATUS.CANCELED) {
+    throw new AppError('Bajarilayotgan vazifani o\'chirib bo\'lmaydi', 400);
+  }
+
+  return prisma.task.update({
+    where: { id: taskId },
+    data: { deletedAt: new Date() }
+  });
+}
+
+module.exports = {
+  createTask,
+  getTaskById,
+  listTasks,
+  startProgress,
+  submitForReview,
+  acceptDelivery,
+  requestRevision,
+  cancelTask,
+  openDispute,
+  deleteTask
+};

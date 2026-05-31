@@ -1,0 +1,408 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── ENUMS ────────────────────────────────────────────────────────────────────
+
+enum TaskStatus {
+  OPEN
+  ASSIGNED
+  IN_PROGRESS
+  IN_REVIEW
+  COMPLETED
+  CANCELED
+  DISPUTED
+}
+
+enum TaskCategory {
+  KONSPEKT     // Lecture notes
+  SLAYD        // Slides / presentations
+  TARJIMA      // Translation
+  KURS_ISHI    // Course work / term paper
+  REFERAT      // Essay / referat
+  LABORATORIYA // Lab report
+  BOSHQA       // Other
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum TransactionType {
+  VIP_PURCHASE
+  ESCROW_HOLD
+  ESCROW_RELEASE
+  ESCROW_REFUND
+  COMMISSION
+}
+
+enum TransactionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+enum DisputeStatus {
+  OPEN
+  UNDER_REVIEW
+  RESOLVED_FOR_CLIENT
+  RESOLVED_FOR_FREELANCER
+  CLOSED
+}
+
+// ─── USER ─────────────────────────────────────────────────────────────────────
+
+model User {
+  id          Int      @id @default(autoincrement())
+  telegramId  BigInt   @unique @map("telegram_id")
+  username    String?  @map("username")
+  fullname    String   @map("fullname")
+  avatarUrl   String?  @map("avatar_url")
+  role        UserRole @default(USER)
+
+  // ── Rating (computed from sum/count to avoid float drift) ──
+  ratingSum   Int @default(0) @map("rating_sum")
+  ratingCount Int @default(0) @map("rating_count")
+
+  // ── VIP / Promoted Profile ──
+  isVip       Boolean   @default(false) @map("is_vip")
+  vipExpiresAt DateTime? @map("vip_expires_at")
+
+  // ── Profile (Phase 14) ──
+  bio          String?  @db.Text
+  skills       String[] @default([])
+  portfolioIds String[] @default([]) @map("portfolio_ids") // Telegram file_ids
+  badge        String   @default("YANGI") // YANGI|ISHONCHLI|PRO|ELITE
+
+  // ── Analytics (Phase 14) ──
+  completionRate Float?   @map("completion_rate") // hisoblangan: scheduler
+  avgResponseHrs Float?   @map("avg_response_hrs")
+
+  // ── Referral (Phase 14) ──
+  referralCode String?  @unique @map("referral_code")
+  referredBy   Int?     @map("referred_by")
+
+  // ── Notification preferences (Phase 14) ──
+  notifPrefs Json @default("{}") @map("notif_prefs")
+  // { "newBid": true, "chatMessage": true, "deadlineReminder": true,
+  //   "taskAssigned": true, "reviewReminder": true }
+
+  // ── Anti-fraud ──
+  lastIpAddress String?  @map("last_ip_address")
+  deviceHash    String?  @map("device_hash")
+  isBanned      Boolean  @default(false) @map("is_banned")
+  banReason     String?  @map("ban_reason")
+
+  // ── Soft delete ──
+  deletedAt DateTime? @map("deleted_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // ── Relations ──
+  clientTasks     Task[]    @relation("ClientTasks")
+  freelancerTasks Task[]    @relation("FreelancerTasks")
+  bids            Bid[]
+  sentMessages    ChatMessage[] @relation("SentMessages")
+  reviewsGiven    Review[]  @relation("ReviewsGiven")
+  reviewsReceived Review[]  @relation("ReviewsReceived")
+  vipPayments     VipPayment[]
+  transactions    TransactionLog[]
+  savedTasks      SavedTask[]
+  gigs            Gig[]
+  portfolioItems  PortfolioItem[]
+
+  @@index([telegramId])
+  @@index([isBanned])
+  @@index([isVip])
+  @@index([deletedAt])
+  @@map("users")
+}
+
+// ─── TASK ─────────────────────────────────────────────────────────────────────
+
+model Task {
+  id           Int          @id @default(autoincrement())
+  clientId     Int          @map("client_id")
+  freelancerId Int?         @map("freelancer_id")
+
+  category     TaskCategory
+  title        String       @db.VarChar(200)
+  description  String       @db.Text
+  priceMin     Int          @map("price_min")
+  priceMax     Int          @map("price_max")
+  agreedPrice  Int?         @map("agreed_price")
+
+  deadline     DateTime     @map("deadline")
+  status       TaskStatus   @default(OPEN)
+
+  // ── File attachments (Telegram file_id strings) ──
+  attachmentFileIds String[] @default([]) @map("attachment_file_ids")
+
+  // ── Urgency (Phase 14) ──
+  isUrgent Boolean @default(false) @map("is_urgent")
+  rushFee  Int     @default(0)     @map("rush_fee")
+
+  // ── State transition timestamps (for anti-fraud 24h check) ──
+  assignedAt   DateTime? @map("assigned_at")
+  inProgressAt DateTime? @map("in_progress_at")
+  inReviewAt   DateTime? @map("in_review_at")
+  completedAt  DateTime? @map("completed_at")
+  canceledAt   DateTime? @map("canceled_at")
+
+  // ── Soft delete ──
+  deletedAt DateTime? @map("deleted_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // ── Relations ──
+  client     User         @relation("ClientTasks", fields: [clientId], references: [id])
+  freelancer User?        @relation("FreelancerTasks", fields: [freelancerId], references: [id])
+  bids       Bid[]
+  chat       ChatMessage[]
+  reviews    Review[]
+  dispute    Dispute?
+  savedBy    SavedTask[]
+
+  @@index([status])
+  @@index([clientId])
+  @@index([freelancerId])
+  @@index([category])
+  @@index([deadline])
+  @@index([deletedAt])
+  @@index([isUrgent])
+  @@map("tasks")
+}
+
+// ─── BID ──────────────────────────────────────────────────────────────────────
+
+model Bid {
+  id           Int     @id @default(autoincrement())
+  taskId       Int     @map("task_id")
+  freelancerId Int     @map("freelancer_id")
+
+  message       String  @db.Text
+  proposedPrice Int     @map("proposed_price")
+  isAccepted    Boolean @default(false) @map("is_accepted")
+
+  // ── Counter-offer (Phase 14) ──
+  counterPrice   Int?      @map("counter_price")
+  counterMessage String?   @db.Text @map("counter_message")
+  counterAt      DateTime? @map("counter_at")
+  counterAccepted Boolean  @default(false) @map("counter_accepted")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // ── Relations ──
+  task       Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  freelancer User @relation(fields: [freelancerId], references: [id])
+
+  @@unique([taskId, freelancerId])
+  @@index([taskId])
+  @@index([freelancerId])
+  @@map("bids")
+}
+
+// ─── CHAT MESSAGE ─────────────────────────────────────────────────────────────
+
+model ChatMessage {
+  id       Int @id @default(autoincrement())
+  taskId   Int @map("task_id")
+  senderId Int @map("sender_id")
+
+  content  String? @db.Text
+  fileId   String? @map("file_id")
+  fileType String? @map("file_type")  // "document" | "photo" | "video"
+  fileName String? @map("file_name")
+
+  isRead    Boolean  @default(false) @map("is_read")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // ── Relations ──
+  task   Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  sender User @relation("SentMessages", fields: [senderId], references: [id])
+
+  @@index([taskId])
+  @@index([senderId])
+  @@index([isRead])
+  @@map("chat_messages")
+}
+
+// ─── REVIEW ───────────────────────────────────────────────────────────────────
+
+model Review {
+  id         Int @id @default(autoincrement())
+  taskId     Int @map("task_id")
+  fromUserId Int @map("from_user_id")
+  toUserId   Int @map("to_user_id")
+
+  rating  Int    // 1–5 (enforced in app layer)
+  comment String @db.Text
+
+  // Anti-fraud: only counts if IN_PROGRESS >= 24h
+  isCountedInRating Boolean @default(false) @map("is_counted_in_rating")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // ── Relations ──
+  task     Task @relation(fields: [taskId], references: [id])
+  fromUser User @relation("ReviewsGiven", fields: [fromUserId], references: [id])
+  toUser   User @relation("ReviewsReceived", fields: [toUserId], references: [id])
+
+  @@unique([taskId, fromUserId])
+  @@index([toUserId])
+  @@index([isCountedInRating])
+  @@map("reviews")
+}
+
+// ─── VIP PAYMENT ──────────────────────────────────────────────────────────────
+
+model VipPayment {
+  id     Int @id @default(autoincrement())
+  userId Int @map("user_id")
+
+  amount           Int    // In so'm
+  packageType      String @map("package_type") // "7_DAY" | "30_DAY"
+  screenshotFileId String @map("screenshot_file_id")
+  phoneNumber      String? @map("phone_number")
+
+  isApproved     Boolean   @default(false) @map("is_approved")
+  approvedBy     Int?      @map("approved_by")
+  approvedAt     DateTime? @map("approved_at")
+  rejectedReason String?   @map("rejected_reason")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // ── Relations ──
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([isApproved])
+  @@index([userId])
+  @@map("vip_payments")
+}
+
+// ─── DISPUTE ──────────────────────────────────────────────────────────────────
+
+model Dispute {
+  id             Int           @id @default(autoincrement())
+  taskId         Int           @unique @map("task_id")
+  openedByUserId Int           @map("opened_by_user_id")
+
+  reason     String        @db.Text
+  status     DisputeStatus @default(OPEN)
+  adminNotes String?       @db.Text @map("admin_notes")
+  resolvedBy Int?          @map("resolved_by")
+  resolvedAt DateTime?     @map("resolved_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // ── Relations ──
+  task Task @relation(fields: [taskId], references: [id])
+
+  @@index([status])
+  @@map("disputes")
+}
+
+// ─── TRANSACTION LOG ──────────────────────────────────────────────────────────
+
+model TransactionLog {
+  id     Int @id @default(autoincrement())
+  userId Int @map("user_id")
+  taskId Int? @map("task_id")
+
+  amount    Int               // Positive = credit, negative = debit
+  type      TransactionType
+  status    TransactionStatus @default(PENDING)
+  reference String?           // External payment ref (Click/Payme)
+  notes     String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // ── Relations ──
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([taskId])
+  @@index([status])
+  @@map("transaction_logs")
+}
+
+// ─── FRAUD LOG ────────────────────────────────────────────────────────────────
+
+model FraudLog {
+  id        Int  @id @default(autoincrement())
+  suspectId Int  @map("suspect_id")
+  targetId  Int? @map("target_id")
+
+  type       String  // "FAKE_REVIEW" | "DUPLICATE_IP" | "SPAM_BID"
+  details    Json    // Raw evidence
+  isActioned Boolean @default(false) @map("is_actioned")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([suspectId])
+  @@index([isActioned])
+  @@map("fraud_logs")
+}
+
+// ─── SAVED TASK (Phase 14) ────────────────────────────────────────────────────
+
+model SavedTask {
+  userId    Int      @map("user_id")
+  taskId    Int      @map("task_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@id([userId, taskId])
+  @@map("saved_tasks")
+}
+
+// ─── GIG (Phase 15) ───────────────────────────────────────────────────────────
+
+model Gig {
+  id           Int      @id @default(autoincrement())
+  freelancerId Int      @map("freelancer_id")
+  title        String   @db.VarChar(200)
+  description  String   @db.Text
+  price        Int
+  deliveryDays Int      @map("delivery_days")
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  // ── Relations ──
+  freelancer   User     @relation(fields: [freelancerId], references: [id])
+
+  @@index([freelancerId])
+  @@index([isActive])
+  @@map("gigs")
+}
+
+// ─── PORTFOLIO ITEM (Phase 15) ────────────────────────────────────────────────
+
+model PortfolioItem {
+  id           Int      @id @default(autoincrement())
+  userId       Int      @map("user_id")
+  title        String   @db.VarChar(200)
+  fileId       String   @map("file_id") // Telegram file_id
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  // ── Relations ──
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("portfolio_items")
+}
