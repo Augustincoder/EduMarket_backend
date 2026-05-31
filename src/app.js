@@ -107,6 +107,11 @@ function createApp() {
   // ── Global rate limiting ──────────────────────────────────────────────────
   app.use(globalRateLimiter);
 
+  // Lightweight ping endpoint for keep-alive crons (prevents Render sleep mode without DB load)
+  app.get('/ping', (req, res) => {
+    res.status(200).send('pong');
+  });
+
   // ─── Health check ─────────────────────────────────────────────────────────
   app.get('/health', async (req, res) => {
     try {

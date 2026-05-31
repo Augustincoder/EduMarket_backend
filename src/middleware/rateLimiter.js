@@ -42,8 +42,8 @@ const globalRateLimiter = createLazyLimiter({
   max: 200,
   message: rateLimitResponse('Juda ko\'p so\'rov. 15 daqiqadan so\'ng urinib ko\'ring.'),
   skip: (req) => {
-    // Skip health checks from load balancers
-    return req.path === '/health';
+    // Skip health checks and ping endpoints from load balancers/crons
+    return req.path === '/health' || req.path === '/ping';
   },
 }, 'global');
 
