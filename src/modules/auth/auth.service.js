@@ -45,25 +45,34 @@ async function loginWithTelegram(initData, ipAddress, referralCode = null) {
   // 5. Generate a unique referral code for the user
   const ownReferralCode = require('crypto').randomBytes(4).toString('hex');
 
-  // 6. Upsert user in database
-  const user = await prisma.user.upsert({
-    where: { telegramId: tgId },
-    update: {
-      username,
-      fullname,
-      role, // Update role in case they were added to admins in .env
-      lastIpAddress: ipAddress,
-    },
-    create: {
-      telegramId: tgId,
-      username,
-      fullname,
-      role,
-      lastIpAddress: ipAddress,
-      referredBy: referredById,
-      referralCode: ownReferralCode
-    }
+  // 6. Find or Create user (Replaced upsert with find/create to avoid Postgres 22P03 binary format error)
+  let user = await prisma.user.findUnique({
+    where: { telegramId: tgId }
   });
+
+  if (user) {
+    user = await prisma.user.update({
+      where: { telegramId: tgId },
+      data: {
+        username,
+        fullname,
+        role, // Update role in case they were added to admins in .env
+        lastIpAddress: ipAddress,
+      }
+    });
+  } else {
+    user = await prisma.user.create({
+      data: {
+        telegramId: tgId,
+        username,
+        fullname,
+        role,
+        lastIpAddress: ipAddress,
+        referredBy: referredById,
+        referralCode: ownReferralCode
+      }
+    });
+  }
   
   // 5. Check if user is banned
   if (user.isBanned) {
