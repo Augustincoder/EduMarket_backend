@@ -11,16 +11,6 @@ const env = require('../config/env');
 function validateInitData(initData) {
   if (!initData) return null;
 
-  // Development/Mock bypass for browser testing
-  if (env.isDev && (initData === 'mock_init_data' || initData.includes('hash=mock_hash'))) {
-    return {
-      id: 99999999,
-      first_name: 'Test',
-      last_name: 'User',
-      username: 'testuser',
-    };
-  }
-
   try {
     // 1. Parse URL-encoded initData string
     const urlParams = new URLSearchParams(initData);

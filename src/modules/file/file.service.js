@@ -11,23 +11,27 @@ const { AppError } = require('../../middleware/errorHandler');
  * @returns {string} Telegram file_id
  */
 async function uploadFileToTelegram(buffer, filename, mimeType) {
-  const bot = getBot();
-  
   if (!env.BOT_STORAGE_CHANNEL_ID || env.BOT_STORAGE_CHANNEL_ID === '-100xxxxxxxxxx') {
     throw new AppError('Telegram storage channel sozlanmagan', 500);
   }
 
   try {
-    // Send document to the private storage channel
-    const message = await bot.sendDocument(
-      env.BOT_STORAGE_CHANNEL_ID,
-      buffer,
-      {},
-      { filename, contentType: mimeType }
-    );
+    const formData = new FormData();
+    formData.append('chat_id', env.BOT_STORAGE_CHANNEL_ID);
+    formData.append('document', new Blob([buffer], { type: mimeType }), filename);
 
-    // Return the file_id of the uploaded document
-    return message.document.file_id;
+    const res = await fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/sendDocument`, {
+      method: 'POST',
+      body: formData
+    });
+
+    if (!res.ok) {
+      const errorText = await res.text();
+      throw new Error(`Telegram API Error: ${errorText}`);
+    }
+
+    const data = await res.json();
+    return data.result.document.file_id;
   } catch (err) {
     throw new AppError(`Fayl yuklashda xatolik: ${err.message}`, 500);
   }
