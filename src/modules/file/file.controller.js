@@ -34,7 +34,7 @@ async function uploadFiles(req, res) {
   for (const file of req.files) {
     // 1. Extension validation (Block .exe, .sh, .bat etc.)
     const ext = path.extname(file.originalname).toLowerCase();
-    const FORBIDDEN_EXTS = ['.exe', '.sh', '.bat', '.js', '.php', '.py'];
+    const FORBIDDEN_EXTS = ['.exe', '.sh', '.bat', '.js', '.php', '.py', '.cmd', '.vbs'];
     if (FORBIDDEN_EXTS.includes(ext)) {
       throw new AppError(`Ushbu kengaytmali faylni yuklash taqiqlangan: ${ext}`, 400);
     }

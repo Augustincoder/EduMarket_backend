@@ -92,6 +92,13 @@ function initSocket(httpServer) {
       logger.debug(`User ${socket.user.userId} left room ${roomName}`);
     });
 
+    socket.on('typing', ({ taskId }) => {
+      if (!taskId) return;
+      const roomName = `task_${taskId}`;
+      // Broadcast to everyone in the room except the sender
+      socket.to(roomName).emit('user_typing', { taskId, userId: socket.user.userId });
+    });
+
     socket.on('disconnect', () => {
       logger.info(`Socket disconnected: ${socket.id}`);
     });
