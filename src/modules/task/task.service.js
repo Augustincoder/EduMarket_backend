@@ -90,6 +90,14 @@ async function getTaskById(id) {
       bids: {
         where: { isAccepted: true },
         select: { id: true, proposedPrice: true, message: true }
+      },
+      dispute: {
+        select: {
+          id: true,
+          reason: true,
+          status: true,
+          adminNotes: true
+        }
       }
     }
   });
