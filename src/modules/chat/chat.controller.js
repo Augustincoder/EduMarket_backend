@@ -33,7 +33,21 @@ async function getMessages(req, res) {
   });
 }
 
+/**
+ * Get all conversations
+ */
+async function getConversations(req, res) {
+  const userId = req.user.userId || req.user.id;
+  const conversations = await chatService.getConversations(userId);
+  
+  res.json({
+    success: true,
+    data: conversations
+  });
+}
+
 module.exports = {
   sendMessage,
-  getMessages
+  getMessages,
+  getConversations
 };

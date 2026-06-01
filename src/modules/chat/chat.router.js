@@ -9,6 +9,9 @@ const { sendMessageSchema } = require('./chat.schema');
 
 router.use(requireAuth);
 
+// GET /api/v1/chat/conversations
+router.get('/conversations', asyncHandler(chatController.getConversations));
+
 // GET /api/v1/chat/:taskId
 router.get('/:taskId', asyncHandler(chatController.getMessages));
 

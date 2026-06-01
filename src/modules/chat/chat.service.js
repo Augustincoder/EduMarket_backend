@@ -99,7 +99,45 @@ async function getMessages(taskId, userId, cursor, limit = 50) {
   };
 }
 
+/**
+ * Barcha faol chatlarni olish (Conversations List)
+ */
+async function getConversations(userId) {
+  const tasks = await prisma.task.findMany({
+    where: {
+      OR: [{ clientId: userId }, { freelancerId: userId }],
+      status: { in: ['ASSIGNED', 'IN_PROGRESS', 'IN_REVIEW', 'COMPLETED'] }
+    },
+    include: {
+      client: { select: { id: true, fullname: true, avatarUrl: true } },
+      freelancer: { select: { id: true, fullname: true, avatarUrl: true } },
+      chat: {
+        orderBy: { createdAt: 'desc' },
+        take: 1,  // Oxirgi xabar
+      },
+      _count: {
+        select: {
+          chat: {
+            where: { senderId: { not: userId }, isRead: false }
+          }
+        }
+      }
+    },
+    orderBy: { updatedAt: 'desc' }
+  });
+  
+  return tasks.map(task => ({
+    taskId:       task.id,
+    taskTitle:    task.title,
+    taskStatus:   task.status,
+    otherUser:    task.clientId === userId ? task.freelancer : task.client,
+    lastMessage:  task.chat[0] || null,
+    unreadCount:  task._count.chat,
+  }));
+}
+
 module.exports = {
   sendMessage,
-  getMessages
+  getMessages,
+  getConversations
 };

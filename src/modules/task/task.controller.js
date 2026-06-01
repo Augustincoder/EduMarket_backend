@@ -13,6 +13,15 @@ async function listTasks(req, res) {
   res.json({ success: true, data: result });
 }
 
+async function getMyTasks(req, res) {
+  const filters = {
+    role: req.query.role,
+    status: req.query.status
+  };
+  const tasks = await taskService.getMyTasks(req.user.userId || req.user.id, filters);
+  res.json({ success: true, data: tasks });
+}
+
 async function getTask(req, res) {
   const taskId = req.params.id;
   if (!taskId) return res.status(400).json({ success: false, message: 'Yaroqsiz ID' });
@@ -75,6 +84,7 @@ async function deleteTask(req, res) {
 module.exports = {
   createTask,
   listTasks,
+  getMyTasks,
   getTask,
   startProgress,
   submitTask,

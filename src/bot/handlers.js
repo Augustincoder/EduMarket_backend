@@ -51,18 +51,66 @@ function initBotHandlers(bot) {
     bot.sendMessage(chatId, welcomeText, options).catch(err => {
       logger.error(`Error sending /start message: ${err.message}`);
     });
+
+    bot.setChatMenuButton({
+      chat_id: chatId,
+      menu_button: {
+        type: 'web_app',
+        text: 'EduMarket 🎓',
+        web_app: { url: appUrl }
+      }
+    }).catch(err => {
+      logger.error(`Error setting chat menu button: ${err.message}`);
+    });
   });
 
   // --- Handle Callback Queries (Inline button clicks) ---
   bot.on('callback_query', (query) => {
     const chatId = query.message.chat.id;
+    const data = query.data;
     
-    if (query.data === 'help') {
+    if (data === 'help') {
       const helpText = `🛠 <b>Yordam bo'limi</b>\n\nPlatforma Telegram Mini App ko'rinishida ishlaydi. Barcha amallar ilova ichida bajariladi.\nSavollaringiz bo'lsa adminga murojaat qiling.`;
       
       bot.sendMessage(chatId, helpText, { parse_mode: 'HTML' }).catch(e => logger.error(e));
       // Answer callback query to remove loading state from button
       bot.answerCallbackQuery(query.id);
+    } else if (data.startsWith('verify_student_approve:')) {
+      if (!env.ADMIN_TELEGRAM_IDS.includes(query.from.id)) {
+        bot.answerCallbackQuery(query.id, { text: "Siz admin emassiz!", show_alert: true });
+        return;
+      }
+      const userId = data.split(':')[1];
+      const prisma = require('../config/prisma');
+      prisma.user.update({
+        where: { id: userId },
+        data: { isVerifiedStudent: true, badge: 'ISHONCHLI' }
+      }).then((user) => {
+        bot.sendMessage(chatId, `✅ Foydalanuvchi <b>${user.fullname}</b> (ID: ${userId}) talabalik guvohnomasi muvaffaqiyatli tasdiqlandi.`, { parse_mode: 'HTML' });
+        bot.sendMessage(user.telegramId.toString(), `🎉 <b>Tabriklaymiz!</b>\n\nSizning talabalik guvohnomangiz muvaffaqiyatli tasdiqlandi. Profilingizga "Ishonchli" 🔵 badge-i qo'shildi!`, { parse_mode: 'HTML' }).catch(() => {});
+        bot.answerCallbackQuery(query.id, { text: "Tasdiqlandi" });
+      }).catch((err) => {
+        bot.sendMessage(chatId, `❌ Tasdiqlashda xatolik: ${err.message}`);
+        bot.answerCallbackQuery(query.id);
+      });
+    } else if (data.startsWith('verify_student_reject:')) {
+      if (!env.ADMIN_TELEGRAM_IDS.includes(query.from.id)) {
+        bot.answerCallbackQuery(query.id, { text: "Siz admin emassiz!", show_alert: true });
+        return;
+      }
+      const userId = data.split(':')[1];
+      const prisma = require('../config/prisma');
+      prisma.user.update({
+        where: { id: userId },
+        data: { isVerifiedStudent: false, studentCardFileId: null }
+      }).then((user) => {
+        bot.sendMessage(chatId, `❌ Foydalanuvchi <b>${user.fullname}</b> (ID: ${userId}) talabalik guvohnomasi rad etildi.`, { parse_mode: 'HTML' });
+        bot.sendMessage(user.telegramId.toString(), `⚠️ <b>Diqqat!</b>\n\nSizning talabalik guvohnomangiz tasdiqlanmadi. Iltimos, guvohnoma rasmini qaytadan yuklang yoki qo'llab-quvvatlash bo'limiga yozing.`, { parse_mode: 'HTML' }).catch(() => {});
+        bot.answerCallbackQuery(query.id, { text: "Rad etildi" });
+      }).catch((err) => {
+        bot.sendMessage(chatId, `❌ Rad etishda xatolik: ${err.message}`);
+        bot.answerCallbackQuery(query.id);
+      });
     }
   });
 

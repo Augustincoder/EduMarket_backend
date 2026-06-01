@@ -61,12 +61,30 @@ enum DisputeStatus {
   CLOSED
 }
 
+enum ReportType {
+  TASK_QUALITY
+  DEADLINE_BREACH
+  COMMUNICATION
+  FRAUD
+  INAPPROPRIATE
+  FAKE_PROFILE
+  SPAM
+  OTHER
+}
+
+enum ReportStatus {
+  PENDING
+  REVIEWED
+  RESOLVED
+  DISMISSED
+}
+
 // ─── USER ─────────────────────────────────────────────────────────────────────
 
 model User {
   id String @id @default(cuid())
   telegramId  BigInt   @unique @map("telegram_id")
-  username    String?  @map("username")
+  username    String?  @unique @map("username")
   fullname    String   @map("fullname")
   avatarUrl   String?  @map("avatar_url")
   role        UserRole @default(USER)
@@ -84,6 +102,21 @@ model User {
   skills       String[] @default([])
   portfolioIds String[] @default([]) @map("portfolio_ids") // Telegram file_ids
   badge        String   @default("YANGI") // YANGI|ISHONCHLI|PRO|ELITE
+
+  // ── Onboarding & Freelancer (v2.0) ──
+  isOnboardingComplete Boolean  @default(false) @map("is_onboarding_complete")
+  isFreelancer         Boolean  @default(false) @map("is_freelancer")
+  freelancerCategories String[] @default([])    @map("freelancer_categories")
+  freelancerBio        String?  @db.Text        @map("freelancer_bio")
+  freelancerExperience Int?     @map("freelancer_experience")
+  
+  region               String?
+  universityId         Int?     @map("university_id")
+  university           String?
+  faculty              String?
+  studyYear            Int?     @map("study_year")
+  studentCardFileId    String?  @map("student_card_file_id")
+  isVerifiedStudent    Boolean  @default(false) @map("is_verified_student")
 
   // ── Analytics (Phase 14) ──
   completionRate Float?   @map("completion_rate") // hisoblangan: scheduler
@@ -122,6 +155,8 @@ model User {
   savedTasks      SavedTask[]
   gigs            Gig[]
   portfolioItems  PortfolioItem[]
+  reportsSubmitted Report[] @relation("ReporterRelation")
+  reportsReceived  Report[] @relation("ReportedRelation")
 
   @@index([isBanned])
   @@index([isVip])
@@ -174,6 +209,7 @@ model Task {
   reviews    Review[]
   dispute    Dispute?
   savedBy    SavedTask[]
+  reports    Report[]
 
   @@index([status])
   @@index([clientId])
@@ -277,7 +313,7 @@ model VipPayment {
   phoneNumber      String? @map("phone_number")
 
   isApproved     Boolean   @default(false) @map("is_approved")
-  approvedBy     Int?      @map("approved_by")
+  approvedBy     String?   @map("approved_by")
   approvedAt     DateTime? @map("approved_at")
   rejectedReason String?   @map("rejected_reason")
 
@@ -296,12 +332,12 @@ model VipPayment {
 model Dispute {
   id String @id @default(cuid())
   taskId         String           @unique @map("task_id")
-  openedByUserId Int           @map("opened_by_user_id")
+  openedByUserId String           @map("opened_by_user_id")
 
   reason     String        @db.Text
   status     DisputeStatus @default(OPEN)
   adminNotes String?       @db.Text @map("admin_notes")
-  resolvedBy Int?          @map("resolved_by")
+  resolvedBy String?       @map("resolved_by")
   resolvedAt DateTime?     @map("resolved_at")
 
   createdAt DateTime @default(now()) @map("created_at")
@@ -342,8 +378,8 @@ model TransactionLog {
 
 model FraudLog {
   id String @id @default(cuid())
-  suspectId Int  @map("suspect_id")
-  targetId  Int? @map("target_id")
+  suspectId String  @map("suspect_id")
+  targetId  String? @map("target_id")
 
   type       String  // "FAKE_REVIEW" | "DUPLICATE_IP" | "SPAM_BID"
   details    Json    // Raw evidence
@@ -404,4 +440,32 @@ model PortfolioItem {
 
   @@index([userId])
   @@map("portfolio_items")
+}
+
+// ─── REPORT (v2.0) ────────────────────────────────────────────────────────────
+
+model Report {
+  id             String       @id @default(cuid())
+  reporterId     String       @map("reporter_id")
+  reportedId     String?      @map("reported_id")
+  taskId         String?      @map("task_id")
+  chatMsgId      String?      @map("chat_msg_id")
+  reportType     ReportType   @map("report_type")
+  reason         String       @db.Text
+  evidenceFileId String?      @map("evidence_file_id")
+  status         ReportStatus @default(PENDING)
+  adminNotes     String?      @db.Text @map("admin_notes")
+  resolvedById   String?      @map("resolved_by_id")
+  resolvedAt     DateTime?    @map("resolved_at")
+  createdAt      DateTime     @default(now()) @map("created_at")
+
+  reporter       User         @relation("ReporterRelation", fields: [reporterId], references: [id])
+  reported       User?        @relation("ReportedRelation", fields: [reportedId], references: [id])
+  task           Task?        @relation(fields: [taskId], references: [id])
+
+  @@index([reporterId])
+  @@index([reportedId])
+  @@index([taskId])
+  @@index([status])
+  @@map("reports")
 }

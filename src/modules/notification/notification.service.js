@@ -1,6 +1,7 @@
 const { getBot } = require('../../config/bot');
 const prisma = require('../../config/prisma');
 const logger = require('../../utils/logger');
+const env = require('../../config/env');
 
 /**
  * Helper to check user notification preferences
@@ -154,6 +155,19 @@ async function referralBonusNotify(user, daysAdded) {
   await sendTelegramMessage(user.telegramId.toString(), text);
 }
 
+async function notifyAdminsVerifyStudent(user, fileId) {
+  const text = `🎓 <b>Yangi talaba guvohnomasi!</b>\n\nFoydalanuvchi: <b>${user.fullname}</b> (ID: ${user.id}, TG: @${user.username || ''})\nGuvohnoma File ID: <code>${fileId}</code>\n\nUni tasdiqlash yoki rad etish uchun quyidagi tugmalarni bosing.`;
+  const keyboard = [
+    [
+      { text: "Tasdiqlash ✅", callback_data: `verify_student_approve:${user.id}` },
+      { text: "Rad etish ❌", callback_data: `verify_student_reject:${user.id}` }
+    ]
+  ];
+  for (const adminId of env.ADMIN_TELEGRAM_IDS) {
+    await sendTelegramMessage(adminId.toString(), text, keyboard);
+  }
+}
+
 module.exports = {
   notifyNewBid,
   notifyTaskAssigned,
@@ -166,5 +180,6 @@ module.exports = {
   taskCompleted,
   revisionRequested,
   smartMatchNotify,
-  referralBonusNotify
+  referralBonusNotify,
+  notifyAdminsVerifyStudent
 };

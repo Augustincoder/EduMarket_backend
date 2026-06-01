@@ -15,6 +15,13 @@ router.get(
   asyncHandler(taskController.listTasks)
 );
 
+// GET /api/v1/tasks/my - User's tasks
+router.get(
+  '/my',
+  requireAuth,
+  asyncHandler(taskController.getMyTasks)
+);
+
 // GET /api/v1/tasks/:id - Publicly accessible
 router.get(
   '/:id',

@@ -50,6 +50,8 @@ async function loginWithTelegram(initData, ipAddress, referralCode = null) {
     where: { telegramId: tgId }
   });
 
+  const isNewUser = !user;
+
   if (user) {
     user = await prisma.user.update({
       where: { telegramId: tgId },
@@ -88,10 +90,12 @@ async function loginWithTelegram(initData, ipAddress, referralCode = null) {
   // Convert BigInt to string for JSON serialization
   const safeUser = {
     ...user,
-    telegramId: user.telegramId.toString()
+    telegramId: user.telegramId.toString(),
+    isOnboardingComplete: user.isOnboardingComplete,
+    isFreelancer: user.isFreelancer,
   };
   
-  return { user: safeUser, token };
+  return { user: safeUser, token, isNewUser };
 }
 
 module.exports = { loginWithTelegram };

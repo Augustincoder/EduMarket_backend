@@ -1,6 +1,7 @@
 const prisma = require('../../config/prisma');
 const { AppError } = require('../../middleware/errorHandler');
 const { TASK_STATUS, validateTransition } = require('./task.stateMachine');
+const { getIO } = require('../../config/socket');
 const notificationService = require('../notification/notification.service');
 
 /**
@@ -40,7 +41,7 @@ async function createTask(clientId, data) {
   });
 
   // Send notifications asynchronously in chunks to prevent blocking/rate limits
-  setImmediate(async () => {
+  Promise.resolve().then(async () => {
     try {
       const chunkSize = 25;
       for (let i = 0; i < matchedVips.length; i += chunkSize) {
@@ -107,6 +108,47 @@ async function getTaskById(id) {
   }
 
   return task;
+}
+
+/**
+ * Get user's tasks by role (Client/Freelancer)
+ */
+async function getMyTasks(userId, filters) {
+  const { role, status } = filters;
+
+  const where = {};
+  if (role === 'CLIENT') {
+    where.clientId = userId;
+  } else if (role === 'FREELANCER') {
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { isFreelancer: true } });
+    if (!user || !user.isFreelancer) {
+      throw new AppError('Siz freelancer emassiz. Avval freelancer rejimini faollashtiring.', 403);
+    }
+    where.freelancerId = userId;
+  } else {
+    // Both
+    where.OR = [{ clientId: userId }, { freelancerId: userId }];
+  }
+
+  if (status) {
+    if (status === 'OPEN') {
+      where.status = 'OPEN';
+    } else {
+      where.status = status;
+    }
+  }
+
+  const tasks = await prisma.task.findMany({
+    where,
+    orderBy: { updatedAt: 'desc' },
+    include: {
+      client: { select: { id: true, fullname: true, avatarUrl: true } },
+      freelancer: { select: { id: true, fullname: true, avatarUrl: true } },
+      _count: { select: { bids: true, chat: { where: { isRead: false, senderId: { not: userId } } } } }
+    }
+  });
+
+  return tasks;
 }
 
 /**
@@ -195,8 +237,17 @@ async function _changeTaskState(taskId, nextState, expectedUserId, roleStr) {
     case TASK_STATUS.CANCELED: updateData.canceledAt = now; break;
   }
 
+  const updatedTask = await prisma.task.update({ where: { id: taskId }, data: updateData, include: { client: true, freelancer: true } });
+
+  try {
+    const io = getIO();
+    io.to(`task_${taskId}`).emit('task_status_changed', { taskId, newStatus: nextState });
+  } catch (err) {
+    // socket not init
+  }
+
   return { 
-    updatedTask: await prisma.task.update({ where: { id: taskId }, data: updateData, include: { client: true, freelancer: true } }), 
+    updatedTask, 
     oldTask: task 
   };
 }
@@ -279,6 +330,7 @@ async function deleteTask(taskId, clientId) {
 module.exports = {
   createTask,
   getTaskById,
+  getMyTasks,
   listTasks,
   startProgress,
   submitForReview,
