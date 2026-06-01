@@ -1,6 +1,6 @@
 const fileService = require('./file.service');
 const { AppError } = require('../../middleware/errorHandler');
-const { fileTypeFromBuffer } = require('file-type');
+const { fromBuffer } = require('file-type');
 const path = require('path');
 
 // Allowed MIME types for MVP
@@ -40,7 +40,7 @@ async function uploadFiles(req, res) {
     }
 
     // 2. Magic bytes validation to prevent MIME spoofing
-    const typeInfo = await fileTypeFromBuffer(file.buffer);
+    const typeInfo = await fromBuffer(file.buffer);
     let mimeType = typeInfo ? typeInfo.mime : null;
 
     // Handle plain text files which do not have magic bytes signatures
