@@ -6,7 +6,7 @@ const loginSchema = z.object({
   }).min(1, 'initData bo\'sh bo\'lishi mumkin emas'),
   
   // Phase 14: Referral system
-  referralCode: z.string().optional(),
+  referralCode: z.string().nullable().optional(),
 });
 
 module.exports = { loginSchema };

@@ -25,6 +25,10 @@ async function getProfile(userId) {
       avgResponseHrs: true,
       referralCode: true,
       referredBy: true,
+      isFreelancer: true,
+      freelancerCategories: true,
+      freelancerBio: true,
+      freelancerExperience: true,
       createdAt: true,
       portfolioItems: {
         select: {
@@ -55,7 +59,11 @@ async function updateProfile(userId, data) {
       bio: true,
       skills: true,
       badge: true,
-      isVip: true
+      isVip: true,
+      isFreelancer: true,
+      freelancerCategories: true,
+      freelancerBio: true,
+      freelancerExperience: true
     }
   });
   

@@ -42,19 +42,24 @@ function validateInitData(initData) {
       .digest('hex');
       
     // 6. Secure compare (mitigates timing attacks)
-    if (crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(hash))) {
+    const signatureBuffer = Buffer.from(signature, 'utf8');
+    const hashBuffer = Buffer.from(hash, 'utf8');
+    
+    if (signatureBuffer.length === hashBuffer.length && crypto.timingSafeEqual(signatureBuffer, hashBuffer)) {
       // Valid! Parse the user JSON string
       const userStr = urlParams.get('user');
       if (!userStr) return null;
       
       const user = JSON.parse(userStr);
       
-      // Optional: Check auth_date to prevent replay attacks (e.g., > 24 hours)
-      const authDate = parseInt(urlParams.get('auth_date'), 10);
-      const now = Math.floor(Date.now() / 1000);
-      if (now - authDate > 86400) {
-        // Init data expired
-        return null;
+      // Optional: Check auth_date to prevent replay attacks (only in production)
+      if (!env.isDev) {
+        const authDate = parseInt(urlParams.get('auth_date'), 10);
+        const now = Math.floor(Date.now() / 1000);
+        if (now - authDate > 86400) {
+          // Init data expired
+          return null;
+        }
       }
       
       return user;
