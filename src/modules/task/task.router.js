@@ -4,11 +4,13 @@ const { validate } = require('../../middleware/validate');
 const { requireAuth } = require('../../middleware/auth');
 const { asyncHandler } = require('../../middleware/errorHandler');
 const { nlpFilter } = require('../../middleware/nlpFilter');
+const { cache } = require('../../middleware/cache');
 const { createTaskSchema, listTasksSchema } = require('./task.schema');
 
 // GET /api/v1/tasks - Publicly accessible
 router.get(
   '/',
+  cache(30), // 30 seconds cache for listings and search
   validate(listTasksSchema, 'query'),
   asyncHandler(taskController.listTasks)
 );
@@ -16,6 +18,7 @@ router.get(
 // GET /api/v1/tasks/:id - Publicly accessible
 router.get(
   '/:id',
+  cache(60), // 60 seconds cache for individual task details
   asyncHandler(taskController.getTask)
 );
 

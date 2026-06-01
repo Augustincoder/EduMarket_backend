@@ -26,13 +26,26 @@ function initScheduler() {
         include: { client: true, freelancer: true },
       });
 
-      for (const task of staleTasks) {
-        await prisma.task.update({
-          where: { id: task.id },
-          data: { status: 'COMPLETED', completedAt: new Date() },
-        });
-        await autoCompleted(task);
-        logger.info(`Auto-completed task #${task.id}`);
+      if (staleTasks.length === 0) return;
+
+      const staleTaskIds = staleTasks.map(t => t.id);
+
+      // Bulk update first to prevent deadlock and speed up DB operations
+      await prisma.task.updateMany({
+        where: { id: { in: staleTaskIds } },
+        data: { status: 'COMPLETED', completedAt: new Date() },
+      });
+
+      // Send notifications in chunks
+      const chunkSize = 50;
+      for (let i = 0; i < staleTasks.length; i += chunkSize) {
+        const chunk = staleTasks.slice(i, i + chunkSize);
+        await Promise.allSettled(
+          chunk.map(async (task) => {
+            await autoCompleted(task);
+            logger.info(`Auto-completed task #${task.id}`);
+          })
+        );
       }
     } catch (err) {
       logger.error(`Auto-complete scheduler error: ${err.message}`);

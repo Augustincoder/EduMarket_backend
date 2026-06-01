@@ -37,7 +37,7 @@ async function listGigs(req, res) {
  * Order a Gig
  */
 async function orderGig(req, res) {
-  const gigId = parseInt(req.params.id, 10);
+  const gigId = req.params.id;
   const clientId = req.user.userId;
 
   const task = await gigService.orderGig(gigId, clientId);
@@ -53,7 +53,7 @@ async function orderGig(req, res) {
  * Toggle active status
  */
 async function toggleStatus(req, res) {
-  const gigId = parseInt(req.params.id, 10);
+  const gigId = req.params.id;
   const userId = req.user.userId;
 
   const gig = await gigService.toggleGigStatus(gigId, userId);

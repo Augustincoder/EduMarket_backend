@@ -34,8 +34,9 @@ const requireAuth = asyncHandler(async (req, res, next) => {
     }
 
     // Ensure user still exists and is not banned
+    const userIdStr = String(decoded.userId);
     const user = await prisma.user.findUnique({
-      where: { id: decoded.userId },
+      where: { id: userIdStr },
       select: { id: true, role: true, isBanned: true }
     });
 
@@ -47,8 +48,8 @@ const requireAuth = asyncHandler(async (req, res, next) => {
       throw new AppError('Hisobingiz bloklangan', 403, 'USER_BANNED');
     }
 
-    // Attach user payload to request
-    req.user = decoded;
+    // Attach user payload to request with stringified ID
+    req.user = { ...decoded, userId: userIdStr };
     
     // Attach the actual token to req.token so we can blacklist it on logout
     req.token = token;

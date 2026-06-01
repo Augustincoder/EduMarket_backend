@@ -4,13 +4,14 @@ const { requireAuth } = require('../../middleware/auth');
 const { asyncHandler } = require('../../middleware/errorHandler');
 
 const { validate } = require('../../middleware/validate');
+const { cache } = require('../../middleware/cache');
 const { updateProfileSchema } = require('./profile.schema');
 
 // Require authentication for all profile routes
 router.use(requireAuth);
 
 // GET /api/v1/users/leaderboard (Must be before /:userId)
-router.get('/leaderboard', asyncHandler(profileController.getLeaderboard));
+router.get('/leaderboard', cache(300), asyncHandler(profileController.getLeaderboard));
 
 // GET /api/v1/users/me
 router.get('/me', requireAuth, asyncHandler(profileController.getMyProfile));
@@ -19,6 +20,6 @@ router.get('/me', requireAuth, asyncHandler(profileController.getMyProfile));
 router.put('/me', validate(updateProfileSchema, 'body'), asyncHandler(profileController.updateMyProfile));
 
 // GET /api/v1/users/:userId
-router.get('/:userId', asyncHandler(profileController.getUserProfile));
+router.get('/:userId', cache(120), asyncHandler(profileController.getUserProfile));
 
 module.exports = router;

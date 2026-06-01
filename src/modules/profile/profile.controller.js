@@ -24,7 +24,7 @@ async function updateMyProfile(req, res) {
  * Get another user's public profile
  */
 async function getUserProfile(req, res) {
-  const userId = parseInt(req.params.userId, 10);
+  const userId = req.params.userId;
   const profile = await profileService.getProfile(userId);
   
   res.json({ success: true, data: profile });

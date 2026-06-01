@@ -3,6 +3,11 @@
 // No app.listen() here — that lives in server.js.
 // This pattern makes testing easy (import app without starting the server).
 
+// Fix BigInt serialization for JSON responses
+BigInt.prototype.toJSON = function () {
+  return this.toString();
+};
+
 const express = require('express');
 const helmet = require('helmet');
 const cors = require('cors');

@@ -4,7 +4,7 @@ const bidService = require('./bid.service');
  * Freelancer places a bid on a task
  */
 async function placeBid(req, res) {
-  const taskId = parseInt(req.params.id, 10);
+  const taskId = req.params.id;
   const freelancerId = req.user.userId;
   
   const bid = await bidService.createBid(taskId, freelancerId, req.body);
@@ -20,8 +20,8 @@ async function placeBid(req, res) {
  * Client accepts a freelancer's bid
  */
 async function acceptBid(req, res) {
-  const taskId = parseInt(req.params.id, 10);
-  const bidId = parseInt(req.params.bidId, 10);
+  const taskId = req.params.id;
+  const bidId = req.params.bidId;
   const clientId = req.user.userId;
   
   const task = await bidService.acceptBid(taskId, bidId, clientId);
@@ -37,7 +37,7 @@ async function acceptBid(req, res) {
  * Client creates a counter-offer
  */
 async function createCounterOffer(req, res) {
-  const bidId = parseInt(req.params.bidId, 10);
+  const bidId = req.params.bidId;
   const clientId = req.user.userId;
   
   const bid = await bidService.createCounterOffer(bidId, clientId, req.body);
@@ -53,7 +53,7 @@ async function createCounterOffer(req, res) {
  * Freelancer accepts the counter-offer
  */
 async function acceptCounterOffer(req, res) {
-  const bidId = parseInt(req.params.bidId, 10);
+  const bidId = req.params.bidId;
   const freelancerId = req.user.userId;
   
   const bid = await bidService.acceptCounterOffer(bidId, freelancerId);
@@ -69,7 +69,7 @@ async function acceptCounterOffer(req, res) {
  * Client views all bids for a task
  */
 async function getTaskBids(req, res) {
-  const taskId = parseInt(req.params.id, 10);
+  const taskId = req.params.id;
   const clientId = req.user.userId;
 
   const bids = await bidService.getTaskBids(taskId, clientId);

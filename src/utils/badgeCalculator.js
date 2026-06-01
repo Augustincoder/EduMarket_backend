@@ -38,30 +38,49 @@ async function calculateBadges() {
     }
 
     // 3. Find EXPERT (e.g., consistently high rating > 4.8 over many tasks)
-    // For MVP, we can keep it simple: Rating count > 20 and average > 4.8
-    // Average = ratingSum / ratingCount
-    // => ratingSum > 4.8 * ratingCount
-    const allUsers = await prisma.user.findMany({
-      where: {
-        role: 'USER',
-        ratingCount: { gte: 20 },
-        badge: { not: 'TOP_SELLER' } // Don't override TOP_SELLER
-      },
-      select: { id: true, ratingSum: true, ratingCount: true }
-    });
+    let hasMore = true;
+    let nextCursor = null;
+    let expertCount = 0;
 
-    const expertIds = allUsers
-      .filter(u => (u.ratingSum / u.ratingCount) >= 4.8)
-      .map(u => u.id);
-
-    if (expertIds.length > 0) {
-      await prisma.user.updateMany({
-        where: { id: { in: expertIds } },
-        data: { badge: 'EXPERT' }
+    while (hasMore) {
+      const usersBatch = await prisma.user.findMany({
+        where: {
+          role: 'USER',
+          ratingCount: { gte: 20 },
+          badge: { not: 'TOP_SELLER' }
+        },
+        select: { id: true, ratingSum: true, ratingCount: true },
+        take: 1000,
+        skip: nextCursor ? 1 : 0,
+        cursor: nextCursor ? { id: nextCursor } : undefined,
+        orderBy: { id: 'asc' }
       });
+
+      if (usersBatch.length === 0) {
+        hasMore = false;
+        break;
+      }
+
+      const expertIds = usersBatch
+        .filter(u => (u.ratingSum / u.ratingCount) >= 4.8)
+        .map(u => u.id);
+
+      if (expertIds.length > 0) {
+        await prisma.user.updateMany({
+          where: { id: { in: expertIds } },
+          data: { badge: 'EXPERT' }
+        });
+        expertCount += expertIds.length;
+      }
+
+      if (usersBatch.length < 1000) {
+        hasMore = false;
+      } else {
+        nextCursor = usersBatch[usersBatch.length - 1].id;
+      }
     }
 
-    logger.info(`Badge calculator finished. Assigned ${topSellers.length} TOP_SELLERs and ${expertIds.length} EXPERTs.`);
+    logger.info(`Badge calculator finished. Assigned ${topSellers.length} TOP_SELLERs and ${expertCount} EXPERTs.`);
   } catch (error) {
     logger.error(`Error in badge calculator job: ${error.message}`);
   }

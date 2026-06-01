@@ -29,6 +29,7 @@ function createLazyLimiter(options, prefix) {
         }),
         standardHeaders: 'draft-7',
         legacyHeaders: false,
+        validate: { creationStack: false },
         ...options,
       });
     }

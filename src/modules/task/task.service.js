@@ -35,15 +35,24 @@ async function createTask(clientId, data) {
         has: data.category
       }
     },
-    select: { id: true, telegramId: true }
+    select: { id: true, telegramId: true },
+    take: 100 // Prevent memory overload if thousands match
   });
 
-  // Send notifications asynchronously so we don't block the API response
-  Promise.all(
-    matchedVips.map(freelancer => 
-      notificationService.smartMatchNotify(freelancer, task)
-    )
-  ).catch(err => console.error('Smart match notification error:', err));
+  // Send notifications asynchronously in chunks to prevent blocking/rate limits
+  setImmediate(async () => {
+    try {
+      const chunkSize = 25;
+      for (let i = 0; i < matchedVips.length; i += chunkSize) {
+        const chunk = matchedVips.slice(i, i + chunkSize);
+        await Promise.allSettled(
+          chunk.map(freelancer => notificationService.smartMatchNotify(freelancer, task))
+        );
+      }
+    } catch (err) {
+      console.error('Smart match notification error:', err);
+    }
+  });
 
   return task;
 }
@@ -111,11 +120,12 @@ async function listTasks(filters) {
     if (maxPrice) where.priceMax = { lte: maxPrice };
   }
   
-  // Phase 14: Full-text search placeholder (LIKE query for now, upgrade to tsvector later)
+  // Phase 14: Full-text search using Postgres tsvector
   if (query) {
+    const formattedQuery = query.trim().split(/\s+/).join(' | ');
     where.OR = [
-      { title: { contains: query, mode: 'insensitive' } },
-      { description: { contains: query, mode: 'insensitive' } }
+      { title: { search: formattedQuery } },
+      { description: { search: formattedQuery } }
     ];
   }
 
@@ -124,9 +134,10 @@ async function listTasks(filters) {
     where.id = { lt: cursor }; // 'lt' because we order by 'desc'
   }
 
+  // Fetch limit + 1 to correctly determine if there's a next page
   const tasks = await prisma.task.findMany({
     where,
-    take: limit,
+    take: limit + 1,
     orderBy: { id: 'desc' },
     include: {
       client: {
@@ -138,8 +149,11 @@ async function listTasks(filters) {
     }
   });
 
-  // Calculate next cursor
-  const nextCursor = tasks.length === limit ? tasks[tasks.length - 1].id : null;
+  let nextCursor = null;
+  if (tasks.length > limit) {
+    tasks.pop(); // Remove the extra item
+    nextCursor = tasks[tasks.length - 1].id;
+  }
 
   return {
     tasks,

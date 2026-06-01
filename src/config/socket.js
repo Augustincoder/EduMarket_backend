@@ -41,8 +41,9 @@ function initSocket(httpServer) {
       }
 
       // 4. Verify User
+      const userIdStr = String(decoded.userId);
       const user = await prisma.user.findUnique({
-        where: { id: decoded.userId },
+        where: { id: userIdStr },
         select: { id: true, isBanned: true }
       });
 
@@ -50,7 +51,7 @@ function initSocket(httpServer) {
       if (user.isBanned) return next(new Error('Authentication error: User banned'));
 
       // Attach user object to socket for later use
-      socket.user = decoded;
+      socket.user = { ...decoded, userId: userIdStr };
       next();
     } catch (err) {
       next(new Error(`Authentication error: ${err.message}`));
@@ -65,7 +66,7 @@ function initSocket(httpServer) {
     socket.on('join_task_room', async (taskId) => {
       // Validate that user belongs to this task
       const task = await prisma.task.findUnique({
-        where: { id: parseInt(taskId, 10) },
+        where: { id: taskId },
         select: { clientId: true, freelancerId: true }
       });
 

@@ -93,7 +93,7 @@ async function getUserReviews(userId, page = 1, limit = 10) {
   const [reviews, total] = await Promise.all([
     prisma.review.findMany({
       where: {
-        toUserId: parseInt(userId, 10),
+        toUserId: userId,
         isCountedInRating: true // Faqat legal izohlarni ko'rsatamiz
       },
       include: {
@@ -110,7 +110,7 @@ async function getUserReviews(userId, page = 1, limit = 10) {
     }),
     prisma.review.count({
       where: {
-        toUserId: parseInt(userId, 10),
+        toUserId: userId,
         isCountedInRating: true
       }
     })

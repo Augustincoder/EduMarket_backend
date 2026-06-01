@@ -4,7 +4,7 @@ const reviewService = require('./review.service');
  * Leave a review for a task
  */
 async function createReview(req, res) {
-  const taskId = parseInt(req.params.taskId, 10);
+  const taskId = req.params.taskId;
   const fromUserId = req.user.userId;
   
   const review = await reviewService.createReview(taskId, fromUserId, req.body);
@@ -23,7 +23,7 @@ async function createReview(req, res) {
  * Get reviews left for a user
  */
 async function getUserReviews(req, res) {
-  const userId = parseInt(req.params.userId, 10);
+  const userId = req.params.userId;
   const page = parseInt(req.query.page, 10) || 1;
   const limit = parseInt(req.query.limit, 10) || 10;
 

@@ -4,12 +4,14 @@ const { requireAuth } = require('../../middleware/auth');
 const { asyncHandler } = require('../../middleware/errorHandler');
 
 const { validate } = require('../../middleware/validate');
+const { cache } = require('../../middleware/cache');
 const { createGigSchema } = require('./gig.schema');
 
 // GET /api/v1/gigs (Public or Authenticated, we make it Authenticated for now)
 router.get(
   '/',
   requireAuth,
+  cache(60), // 60 seconds cache for gig listings
   asyncHandler(gigController.listGigs)
 );
 

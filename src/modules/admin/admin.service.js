@@ -46,12 +46,17 @@ async function setUserBanStatus(adminId, targetUserId, isBanned, reason) {
 /**
  * Get all pending VIP requests
  */
-async function getPendingVipRequests() {
-  return prisma.vipPayment.findMany({
-    where: {
-      isApproved: false,
-      rejectedReason: null
-    },
+async function getPendingVipRequests(limit = 50, cursor = null) {
+  const where = {
+    isApproved: false,
+    rejectedReason: null
+  };
+
+  const requests = await prisma.vipPayment.findMany({
+    where,
+    take: limit + 1,
+    skip: cursor ? 1 : 0,
+    cursor: cursor ? { id: cursor } : undefined,
     include: {
       user: {
         select: { id: true, fullname: true, username: true }
@@ -59,6 +64,14 @@ async function getPendingVipRequests() {
     },
     orderBy: { createdAt: 'asc' }
   });
+
+  let nextCursor = null;
+  if (requests.length > limit) {
+    requests.pop();
+    nextCursor = requests[requests.length - 1].id;
+  }
+
+  return { requests, nextCursor };
 }
 
 /**
@@ -85,9 +98,14 @@ async function resolveFraudLog(logId) {
 /**
  * Get all open disputes
  */
-async function getOpenDisputes() {
-  return prisma.dispute.findMany({
-    where: { status: 'OPEN' },
+async function getOpenDisputes(limit = 50, cursor = null) {
+  const where = { status: 'OPEN' };
+
+  const disputes = await prisma.dispute.findMany({
+    where,
+    take: limit + 1,
+    skip: cursor ? 1 : 0,
+    cursor: cursor ? { id: cursor } : undefined,
     include: {
       task: {
         include: {
@@ -99,6 +117,14 @@ async function getOpenDisputes() {
     },
     orderBy: { createdAt: 'asc' }
   });
+
+  let nextCursor = null;
+  if (disputes.length > limit) {
+    disputes.pop();
+    nextCursor = disputes[disputes.length - 1].id;
+  }
+
+  return { disputes, nextCursor };
 }
 
 /**

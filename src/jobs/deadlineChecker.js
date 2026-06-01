@@ -32,10 +32,17 @@ async function runDeadlineCheck() {
       }
     });
 
-    for (const task of tasksToWarn) {
-      if (task.freelancerId) {
-        await notifyDeadlineApproaching(task.freelancerId, task.title, task.id);
-      }
+    // Send notifications in chunks
+    const chunkSize = 50;
+    for (let i = 0; i < tasksToWarn.length; i += chunkSize) {
+      const chunk = tasksToWarn.slice(i, i + chunkSize);
+      await Promise.allSettled(
+        chunk.map(async (task) => {
+          if (task.freelancerId) {
+            await notifyDeadlineApproaching(task.freelancerId, task.title, task.id);
+          }
+        })
+      );
     }
 
     logger.info(`Deadline checker finished. Reminded ${tasksToWarn.length} freelancers.`);

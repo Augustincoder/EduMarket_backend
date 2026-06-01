@@ -26,7 +26,7 @@ async function addPortfolioItem(req, res) {
  * Delete a portfolio item
  */
 async function deletePortfolioItem(req, res) {
-  const itemId = parseInt(req.params.id, 10);
+  const itemId = req.params.id;
   const userId = req.user.userId;
 
   await portfolioService.deletePortfolioItem(itemId, userId);
@@ -41,7 +41,7 @@ async function deletePortfolioItem(req, res) {
  * Get user's portfolio
  */
 async function getUserPortfolio(req, res) {
-  const targetUserId = parseInt(req.params.userId, 10);
+  const targetUserId = req.params.userId;
 
   const items = await portfolioService.getUserPortfolio(targetUserId);
 

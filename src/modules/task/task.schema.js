@@ -29,7 +29,7 @@ const createTaskSchema = z.object({
 
 // Schema for listing tasks (query params)
 const listTasksSchema = z.object({
-  cursor: z.string().regex(/^\d+$/).transform(Number).optional(),
+  cursor: z.string().optional(),
   limit: z.string().regex(/^\d+$/).transform(Number).optional().default('20'),
   category: z.enum(['KONSPEKT', 'SLAYD', 'TARJIMA', 'KURS_ISHI', 'REFERAT', 'LABORATORIYA', 'BOSHQA']).optional(),
   status: z.enum(['OPEN', 'ASSIGNED', 'IN_PROGRESS', 'IN_REVIEW', 'COMPLETED', 'CANCELED', 'DISPUTED']).optional(),

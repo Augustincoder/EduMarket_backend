@@ -14,7 +14,7 @@ async function getStats(req, res) {
  * Ban or unban a user
  */
 async function setUserBan(req, res) {
-  const targetUserId = parseInt(req.params.userId, 10);
+  const targetUserId = req.params.userId;
   const { isBanned, reason } = req.body;
   
   if (isBanned && !reason) {
@@ -34,15 +34,17 @@ async function setUserBan(req, res) {
  * Get pending VIP requests
  */
 async function getPendingVipRequests(req, res) {
-  const requests = await adminService.getPendingVipRequests();
-  res.json({ success: true, data: requests });
+  const limit = parseInt(req.query.limit, 10) || 50;
+  const cursor = req.query.cursor || null;
+  const result = await adminService.getPendingVipRequests(limit, cursor);
+  res.json({ success: true, data: result });
 }
 
 /**
  * Process a VIP request
  */
 async function processVipRequest(req, res) {
-  const paymentId = parseInt(req.params.paymentId, 10);
+  const paymentId = req.params.paymentId;
   const { isApproved, rejectReason } = req.body;
 
   if (isApproved === false && !rejectReason) {
@@ -70,7 +72,7 @@ async function getFraudLogs(req, res) {
  * Mark fraud log as resolved
  */
 async function resolveFraudLog(req, res) {
-  const logId = parseInt(req.params.logId, 10);
+  const logId = req.params.logId;
   await adminService.resolveFraudLog(logId);
   res.json({ success: true, message: 'Log yopildi' });
 }
@@ -79,15 +81,17 @@ async function resolveFraudLog(req, res) {
  * Get all open disputes
  */
 async function getDisputes(req, res) {
-  const disputes = await adminService.getOpenDisputes();
-  res.json({ success: true, data: disputes });
+  const limit = parseInt(req.query.limit, 10) || 50;
+  const cursor = req.query.cursor || null;
+  const result = await adminService.getOpenDisputes(limit, cursor);
+  res.json({ success: true, data: result });
 }
 
 /**
  * Resolve a dispute
  */
 async function resolveDispute(req, res) {
-  const disputeId = parseInt(req.params.id, 10);
+  const disputeId = req.params.id;
   const { winner, adminNotes } = req.body;
 
   if (!winner) {

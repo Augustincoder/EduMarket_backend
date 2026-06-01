@@ -2,7 +2,8 @@
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["fullTextSearch"]
 }
 
 datasource db {
@@ -63,7 +64,7 @@ enum DisputeStatus {
 // ─── USER ─────────────────────────────────────────────────────────────────────
 
 model User {
-  id          Int      @id @default(autoincrement())
+  id String @id @default(cuid())
   telegramId  BigInt   @unique @map("telegram_id")
   username    String?  @map("username")
   fullname    String   @map("fullname")
@@ -90,7 +91,7 @@ model User {
 
   // ── Referral (Phase 14) ──
   referralCode String?  @unique @map("referral_code")
-  referredBy   Int?     @map("referred_by")
+  referredBy   String?     @map("referred_by")
 
   // ── Notification preferences (Phase 14) ──
   notifPrefs Json @default("{}") @map("notif_prefs")
@@ -132,9 +133,9 @@ model User {
 // ─── TASK ─────────────────────────────────────────────────────────────────────
 
 model Task {
-  id           Int          @id @default(autoincrement())
-  clientId     Int          @map("client_id")
-  freelancerId Int?         @map("freelancer_id")
+  id String @id @default(cuid())
+  clientId     String          @map("client_id")
+  freelancerId String?         @map("freelancer_id")
 
   category     TaskCategory
   title        String       @db.VarChar(200)
@@ -188,9 +189,9 @@ model Task {
 // ─── BID ──────────────────────────────────────────────────────────────────────
 
 model Bid {
-  id           Int     @id @default(autoincrement())
-  taskId       Int     @map("task_id")
-  freelancerId Int     @map("freelancer_id")
+  id String @id @default(cuid())
+  taskId       String     @map("task_id")
+  freelancerId String     @map("freelancer_id")
 
   message       String  @db.Text
   proposedPrice Int     @map("proposed_price")
@@ -217,9 +218,9 @@ model Bid {
 // ─── CHAT MESSAGE ─────────────────────────────────────────────────────────────
 
 model ChatMessage {
-  id       Int @id @default(autoincrement())
-  taskId   Int @map("task_id")
-  senderId Int @map("sender_id")
+  id String @id @default(cuid())
+  taskId   String @map("task_id")
+  senderId String @map("sender_id")
 
   content  String? @db.Text
   fileId   String? @map("file_id")
@@ -242,10 +243,10 @@ model ChatMessage {
 // ─── REVIEW ───────────────────────────────────────────────────────────────────
 
 model Review {
-  id         Int @id @default(autoincrement())
-  taskId     Int @map("task_id")
-  fromUserId Int @map("from_user_id")
-  toUserId   Int @map("to_user_id")
+  id String @id @default(cuid())
+  taskId     String @map("task_id")
+  fromUserId String @map("from_user_id")
+  toUserId   String @map("to_user_id")
 
   rating  Int    // 1–5 (enforced in app layer)
   comment String @db.Text
@@ -269,8 +270,8 @@ model Review {
 // ─── VIP PAYMENT ──────────────────────────────────────────────────────────────
 
 model VipPayment {
-  id     Int @id @default(autoincrement())
-  userId Int @map("user_id")
+  id String @id @default(cuid())
+  userId String @map("user_id")
 
   amount           Int    // In so'm
   packageType      String @map("package_type") // "7_DAY" | "30_DAY"
@@ -295,8 +296,8 @@ model VipPayment {
 // ─── DISPUTE ──────────────────────────────────────────────────────────────────
 
 model Dispute {
-  id             Int           @id @default(autoincrement())
-  taskId         Int           @unique @map("task_id")
+  id String @id @default(cuid())
+  taskId         String           @unique @map("task_id")
   openedByUserId Int           @map("opened_by_user_id")
 
   reason     String        @db.Text
@@ -318,9 +319,9 @@ model Dispute {
 // ─── TRANSACTION LOG ──────────────────────────────────────────────────────────
 
 model TransactionLog {
-  id     Int @id @default(autoincrement())
-  userId Int @map("user_id")
-  taskId Int? @map("task_id")
+  id String @id @default(cuid())
+  userId String @map("user_id")
+  taskId String? @map("task_id")
 
   amount    Int               // Positive = credit, negative = debit
   type      TransactionType
@@ -342,7 +343,7 @@ model TransactionLog {
 // ─── FRAUD LOG ────────────────────────────────────────────────────────────────
 
 model FraudLog {
-  id        Int  @id @default(autoincrement())
+  id String @id @default(cuid())
   suspectId Int  @map("suspect_id")
   targetId  Int? @map("target_id")
 
@@ -360,8 +361,8 @@ model FraudLog {
 // ─── SAVED TASK (Phase 14) ────────────────────────────────────────────────────
 
 model SavedTask {
-  userId    Int      @map("user_id")
-  taskId    Int      @map("task_id")
+  userId    String      @map("user_id")
+  taskId    String      @map("task_id")
   createdAt DateTime @default(now()) @map("created_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -374,8 +375,8 @@ model SavedTask {
 // ─── GIG (Phase 15) ───────────────────────────────────────────────────────────
 
 model Gig {
-  id           Int      @id @default(autoincrement())
-  freelancerId Int      @map("freelancer_id")
+  id String @id @default(cuid())
+  freelancerId String      @map("freelancer_id")
   title        String   @db.VarChar(200)
   description  String   @db.Text
   price        Int
@@ -394,8 +395,8 @@ model Gig {
 // ─── PORTFOLIO ITEM (Phase 15) ────────────────────────────────────────────────
 
 model PortfolioItem {
-  id           Int      @id @default(autoincrement())
-  userId       Int      @map("user_id")
+  id String @id @default(cuid())
+  userId       String      @map("user_id")
   title        String   @db.VarChar(200)
   fileId       String   @map("file_id") // Telegram file_id
   createdAt    DateTime @default(now()) @map("created_at")
