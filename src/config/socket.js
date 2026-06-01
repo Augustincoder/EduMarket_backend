@@ -19,8 +19,12 @@ function initSocket(httpServer) {
     }
   });
 
-  // Attach Redis adapter for cluster/multi-instance scale
-  io.adapter(createAdapter(pubClient, subClient));
+  // Attach Redis adapter for cluster/multi-instance scale if connected
+  if (pubClient.isOpen && subClient.isOpen) {
+    io.adapter(createAdapter(pubClient, subClient));
+  } else {
+    logger.warn('Redis is not connected. Socket.io will use memory adapter.');
+  }
 
   // Middleware for Authentication
   io.use(async (socket, next) => {

@@ -20,13 +20,18 @@ function createLazyLimiter(options, prefix) {
   let limiter;
   return (req, res, next) => {
     if (!limiter) {
+      // Fallback to MemoryStore if Redis is not connected (e.g. no REDIS_URL on Render)
+      const store = pubClient.isOpen 
+        ? new RedisStore({
+            sendCommand: async (...args) => {
+              return pubClient.sendCommand(args);
+            },
+            prefix: `rl:${prefix}:`,
+          })
+        : undefined;
+
       limiter = rateLimit({
-        store: new RedisStore({
-          sendCommand: async (...args) => {
-            return pubClient.sendCommand(args);
-          },
-          prefix: `rl:${prefix}:`,
-        }),
+        store,
         standardHeaders: 'draft-7',
         legacyHeaders: false,
         validate: { creationStack: false },
