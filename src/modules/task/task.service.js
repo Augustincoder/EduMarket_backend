@@ -272,6 +272,48 @@ async function submitForReview(taskId, freelancerId) {
 
 async function acceptDelivery(taskId, clientId) {
   const { updatedTask } = await _changeTaskState(taskId, TASK_STATUS.COMPLETED, clientId, 'CLIENT');
+  
+  // Phase 5: Referral Bonus Logic (5%)
+  try {
+    if (updatedTask.freelancerId) {
+      const freelancer = await prisma.user.findUnique({ where: { id: updatedTask.freelancerId } });
+      if (freelancer && freelancer.referredBy) {
+        // Find accepted bid price
+        const acceptedBid = await prisma.bid.findFirst({
+          where: { taskId, isAccepted: true }
+        });
+        
+        const price = acceptedBid?.counterAccepted ? acceptedBid.counterPrice : (acceptedBid?.proposedPrice || 0);
+        
+        if (price > 0) {
+          const bonusAmount = Math.floor(price * 0.05); // 5% bonus
+          
+          if (bonusAmount > 0) {
+            // Give bonus to referrer
+            await prisma.$transaction([
+              prisma.user.update({
+                where: { id: freelancer.referredBy },
+                data: { referralEarned: { increment: bonusAmount } }
+              }),
+              prisma.transactionLog.create({
+                data: {
+                  userId: freelancer.referredBy,
+                  taskId,
+                  amount: bonusAmount,
+                  type: 'REFERRAL_BONUS',
+                  status: 'COMPLETED',
+                  notes: `${freelancer.fullname} tomonidan bajarilgan vazifadan 5% bonus`
+                }
+              })
+            ]);
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.error('Referral bonus error:', err);
+  }
+
   await notificationService.taskCompleted(updatedTask);
   return updatedTask;
 }

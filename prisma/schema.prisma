@@ -44,6 +44,7 @@ enum TransactionType {
   ESCROW_RELEASE
   ESCROW_REFUND
   COMMISSION
+  REFERRAL_BONUS
 }
 
 enum TransactionStatus {
@@ -122,9 +123,16 @@ model User {
   completionRate Float?   @map("completion_rate") // hisoblangan: scheduler
   avgResponseHrs Float?   @map("avg_response_hrs")
 
-  // ── Referral (Phase 14) ──
-  referralCode String?  @unique @map("referral_code")
-  referredBy   String?     @map("referred_by")
+  // ── Gamification & Retention (Phase 5) ──
+  streakCount    Int       @default(0) @map("streak_count")
+  lastLoginDate  DateTime? @map("last_login_date")
+  xp             Int       @default(0) @map("xp")
+  achievements   Json      @default("[]") @map("achievements")
+
+  // ── Referral (Phase 14 & Phase 5) ──
+  referralCode   String?  @unique @map("referral_code")
+  referredBy     String?  @map("referred_by")
+  referralEarned Float    @default(0) @map("referral_earned")
 
   // ── Notification preferences (Phase 14) ──
   notifPrefs Json @default("{}") @map("notif_prefs")

@@ -37,12 +37,23 @@ async function createGig(userId, data) {
  * List all active Gigs
  */
 async function listGigs(query = {}) {
-  const { limit = 20, page = 1 } = query;
+  const { limit = 10, page = 1, freelancerId, query: searchQuery } = query;
   const skip = (page - 1) * limit;
+
+  const where = { isActive: true };
+  if (freelancerId) {
+    where.freelancerId = freelancerId;
+  }
+  if (searchQuery) {
+    where.OR = [
+      { title: { contains: searchQuery, mode: 'insensitive' } },
+      { description: { contains: searchQuery, mode: 'insensitive' } }
+    ];
+  }
 
   const [gigs, total] = await Promise.all([
     prisma.gig.findMany({
-      where: { isActive: true },
+      where,
       include: {
         freelancer: {
           select: { id: true, fullname: true, avatarUrl: true, isVip: true, ratingSum: true, ratingCount: true }
@@ -55,7 +66,7 @@ async function listGigs(query = {}) {
       skip,
       take: parseInt(limit, 10)
     }),
-    prisma.gig.count({ where: { isActive: true } })
+    prisma.gig.count({ where })
   ]);
 
   return {

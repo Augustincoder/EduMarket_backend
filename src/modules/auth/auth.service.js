@@ -53,6 +53,32 @@ async function loginWithTelegram(initData, ipAddress, referralCode = null) {
   const isNewUser = !user;
 
   if (user) {
+    // Calculate Streak & XP
+    const now = new Date();
+    let newStreak = user.streakCount || 0;
+    let newXp = user.xp || 0;
+    
+    if (user.lastLoginDate) {
+      const lastLogin = new Date(user.lastLoginDate);
+      // Reset hours to compare pure dates
+      const nowDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const lastDate = new Date(lastLogin.getFullYear(), lastLogin.getMonth(), lastLogin.getDate());
+      
+      const diffTime = Math.abs(nowDate - lastDate);
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+      
+      if (diffDays === 1) {
+        newStreak += 1; // Yesterday
+        newXp += 50; // Daily reward
+      } else if (diffDays > 1) {
+        newStreak = 1; // Streak broken
+        newXp += 50; 
+      }
+    } else {
+      newStreak = 1;
+      newXp += 50;
+    }
+
     user = await prisma.user.update({
       where: { telegramId: tgId },
       data: {
@@ -60,6 +86,9 @@ async function loginWithTelegram(initData, ipAddress, referralCode = null) {
         fullname,
         role, // Update role in case they were added to admins in .env
         lastIpAddress: ipAddress,
+        lastLoginDate: now,
+        streakCount: newStreak,
+        xp: newXp
       }
     });
   } else {
@@ -71,7 +100,10 @@ async function loginWithTelegram(initData, ipAddress, referralCode = null) {
         role,
         lastIpAddress: ipAddress,
         referredBy: referredById,
-        referralCode: ownReferralCode
+        referralCode: ownReferralCode,
+        lastLoginDate: new Date(),
+        streakCount: 1,
+        xp: 50
       }
     });
   }

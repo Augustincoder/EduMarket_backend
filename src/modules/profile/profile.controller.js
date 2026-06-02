@@ -42,9 +42,21 @@ async function getLeaderboard(req, res) {
   });
 }
 
+/**
+ * Get referrals
+ */
+async function getMyReferrals(req, res) {
+  const referrals = await profileService.getReferrals(req.user.userId);
+  res.json({
+    success: true,
+    data: referrals
+  });
+}
+
 module.exports = {
   getMyProfile,
   updateMyProfile,
   getUserProfile,
-  getLeaderboard
+  getLeaderboard,
+  getMyReferrals
 };

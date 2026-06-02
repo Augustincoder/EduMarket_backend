@@ -30,6 +30,26 @@ async function getStats() {
     prisma.user.count({ where: { isVerifiedStudent: false, studentCardFileId: { not: null } } })
   ]);
 
+  // Chart data: Last 7 days user growth and tasks created
+  const chartData = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const startOfDay = new Date(d.setHours(0, 0, 0, 0));
+    const endOfDay = new Date(d.setHours(23, 59, 59, 999));
+    
+    const [dailyUsers, dailyTasks] = await Promise.all([
+      prisma.user.count({ where: { createdAt: { gte: startOfDay, lte: endOfDay } } }),
+      prisma.task.count({ where: { createdAt: { gte: startOfDay, lte: endOfDay } } })
+    ]);
+    
+    chartData.push({
+      name: startOfDay.toLocaleDateString('uz-UZ', { month: 'short', day: 'numeric' }),
+      users: dailyUsers,
+      tasks: dailyTasks
+    });
+  }
+
   return {
     users: userCount,
     tasks: {
@@ -39,7 +59,8 @@ async function getStats() {
     pendingVipRequests: pendingVip,
     pendingReports,
     openDisputes,
-    pendingStudentVerifications
+    pendingStudentVerifications,
+    chartData
   };
 }
 
