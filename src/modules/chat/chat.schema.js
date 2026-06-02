@@ -1,7 +1,13 @@
 const { z } = require('zod');
 
 const sendMessageSchema = z.object({
-  message: z.string().min(1, "Xabar bo'sh bo'lishi mumkin emas").max(2000, "Xabar 2000 ta belgidan oshmasligi kerak").trim()
+  content: z.string().max(2000, "Xabar 2000 ta belgidan oshmasligi kerak").trim().optional().nullable(),
+  fileId: z.string().optional().nullable(),
+  fileType: z.string().optional().nullable(),
+  fileName: z.string().optional().nullable(),
+}).refine(data => (data.content && data.content.trim().length > 0) || data.fileId, {
+  message: "Xabar matni yoki fayl yuborilishi shart",
+  path: ["content"]
 });
 
 module.exports = {

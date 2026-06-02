@@ -1,7 +1,7 @@
 const prisma = require('../../config/prisma');
 const { AppError } = require('../../middleware/errorHandler');
 const { TASK_STATUS, validateTransition } = require('./task.stateMachine');
-const { getIO } = require('../../config/socket');
+const { getIO, isUserOnline } = require('../../config/socket');
 const notificationService = require('../notification/notification.service');
 
 /**
@@ -105,6 +105,14 @@ async function getTaskById(id) {
 
   if (!task || task.deletedAt) {
     throw new AppError('Vazifa topilmadi', 404, 'TASK_NOT_FOUND');
+  }
+
+  // Populate dynamic online status
+  if (task.client) {
+    task.client.isOnline = await isUserOnline(task.client.id);
+  }
+  if (task.freelancer) {
+    task.freelancer.isOnline = await isUserOnline(task.freelancer.id);
   }
 
   return task;

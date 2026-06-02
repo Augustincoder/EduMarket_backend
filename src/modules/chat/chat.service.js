@@ -1,6 +1,6 @@
 const prisma = require('../../config/prisma');
 const { AppError } = require('../../middleware/errorHandler');
-const { getIO } = require('../../config/socket');
+const { getIO, isUserOnline } = require('../../config/socket');
 
 /**
  * Validates if a user has access to a task's chat
@@ -27,7 +27,7 @@ async function checkChatAccess(taskId, userId) {
  * Send a message in a task's chat
  */
 async function sendMessage(taskId, senderId, data) {
-  await checkChatAccess(taskId, senderId);
+  const task = await checkChatAccess(taskId, senderId);
 
   // Note: File handling (if data contains file_id) is handled by the controller
   // and passed here as data.fileId, data.fileType, etc.
@@ -51,6 +51,26 @@ async function sendMessage(taskId, senderId, data) {
     io.to(roomName).emit('new_message', message);
   } catch (err) {
     // Ignored: socket might not be initialized during test/startup
+  }
+
+  // Telegram notification fallback if recipient is offline
+  try {
+    const recipientId = task.clientId === senderId ? task.freelancerId : task.clientId;
+    if (recipientId) {
+      const recipientOnline = await isUserOnline(recipientId);
+      if (!recipientOnline) {
+        const sender = await prisma.user.findUnique({
+          where: { id: senderId },
+          select: { fullname: true }
+        });
+        const senderName = sender ? sender.fullname : 'Foydalanuvchi';
+        const notificationService = require('../notification/notification.service');
+        notificationService.notifyChatMessage(recipientId, senderName, taskId)
+          .catch(err => console.error('Failed to send Telegram notification:', err));
+      }
+    }
+  } catch (err) {
+    console.error('Failed offline notification check:', err);
   }
 
   return message;
@@ -126,14 +146,23 @@ async function getConversations(userId) {
     orderBy: { updatedAt: 'desc' }
   });
   
-  return tasks.map(task => ({
-    taskId:       task.id,
-    taskTitle:    task.title,
-    taskStatus:   task.status,
-    otherUser:    task.clientId === userId ? task.freelancer : task.client,
-    lastMessage:  task.chat[0] || null,
-    unreadCount:  task._count.chat,
+  const result = await Promise.all(tasks.map(async (task) => {
+    const otherUser = task.clientId === userId ? task.freelancer : task.client;
+    let otherUserOnline = false;
+    if (otherUser) {
+      otherUserOnline = await isUserOnline(otherUser.id);
+    }
+    return {
+      taskId:       task.id,
+      taskTitle:    task.title,
+      taskStatus:   task.status,
+      otherUser:    otherUser ? { ...otherUser, isOnline: otherUserOnline } : null,
+      lastMessage:  task.chat[0] || null,
+      unreadCount:  task._count.chat,
+    };
   }));
+
+  return result;
 }
 
 module.exports = {

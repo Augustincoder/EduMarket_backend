@@ -8,6 +8,90 @@ const prisma = require('./prisma');
 
 let io;
 
+// Active user socket connections map (for local memory fallback)
+const localConnections = new Map();
+
+/**
+ * Handle user connection tracking
+ */
+async function handleUserConnect(userId, socketId) {
+  if (!localConnections.has(userId)) {
+    localConnections.set(userId, new Set());
+  }
+  const isFirstLocal = localConnections.get(userId).size === 0;
+  localConnections.get(userId).add(socketId);
+
+  let isFirstOverall = isFirstLocal;
+  if (pubClient.isOpen) {
+    try {
+      await pubClient.sAdd(`user:sockets:${userId}`, socketId);
+      await pubClient.expire(`user:sockets:${userId}`, 86400); // 24h safety TTL
+      
+      const added = await pubClient.sAdd('online_users', userId);
+      isFirstOverall = added > 0;
+    } catch (err) {
+      logger.error(`Redis presence error on connect for user ${userId}: ${err.message}`);
+    }
+  }
+
+  if (isFirstOverall && io) {
+    logger.debug(`User ${userId} is now online`);
+    io.emit('user_status_changed', { userId, isOnline: true });
+  }
+}
+
+/**
+ * Handle user disconnection tracking
+ */
+async function handleUserDisconnect(userId, socketId) {
+  const userSockets = localConnections.get(userId);
+  if (userSockets) {
+    userSockets.delete(socketId);
+    if (userSockets.size === 0) {
+      localConnections.delete(userId);
+    }
+  }
+
+  let isLastOverall = !localConnections.has(userId);
+  if (pubClient.isOpen) {
+    try {
+      await pubClient.sRem(`user:sockets:${userId}`, socketId);
+      const remaining = await pubClient.sCard(`user:sockets:${userId}`);
+      if (remaining === 0) {
+        await pubClient.sRem('online_users', userId);
+        isLastOverall = true;
+      } else {
+        isLastOverall = false;
+      }
+    } catch (err) {
+      logger.error(`Redis presence error on disconnect for user ${userId}: ${err.message}`);
+    }
+  }
+
+  if (isLastOverall && io) {
+    logger.debug(`User ${userId} is now offline`);
+    io.emit('user_status_changed', { userId, isOnline: false });
+  }
+}
+
+/**
+ * Check if a user is online (checks local cache and Redis fallback)
+ */
+async function isUserOnline(userId) {
+  if (localConnections.has(userId) && localConnections.get(userId).size > 0) {
+    return true;
+  }
+  if (pubClient.isOpen) {
+    try {
+      const isMember = await pubClient.sIsMember('online_users', userId);
+      return !!isMember;
+    } catch (err) {
+      logger.error(`Redis isUserOnline error for user ${userId}: ${err.message}`);
+    }
+  }
+  return false;
+}
+
 /**
  * Initialize Socket.io Server and attach to HTTP server
  */
@@ -22,6 +106,8 @@ function initSocket(httpServer) {
   // Attach Redis adapter for cluster/multi-instance scale if connected
   if (pubClient.isOpen && subClient.isOpen) {
     io.adapter(createAdapter(pubClient, subClient));
+    // Clear Redis online presence cache on server start
+    pubClient.del('online_users').catch(err => logger.error(`Redis startup cleanup error: ${err.message}`));
   } else {
     logger.warn('Redis is not connected. Socket.io will use memory adapter.');
   }
@@ -64,7 +150,11 @@ function initSocket(httpServer) {
 
   // Connection Handler
   io.on('connection', (socket) => {
-    logger.info(`Socket connected: ${socket.id} (User: ${socket.user.userId})`);
+    const userId = socket.user.userId;
+    logger.info(`Socket connected: ${socket.id} (User: ${userId})`);
+
+    // Track connection status
+    handleUserConnect(userId, socket.id).catch(err => logger.error(`Error handling connect presence: ${err.message}`));
 
     // Client requests to join a task-specific chat room
     socket.on('join_task_room', async (taskId) => {
@@ -101,6 +191,7 @@ function initSocket(httpServer) {
 
     socket.on('disconnect', () => {
       logger.info(`Socket disconnected: ${socket.id}`);
+      handleUserDisconnect(userId, socket.id).catch(err => logger.error(`Error handling disconnect presence: ${err.message}`));
     });
   });
 
@@ -119,5 +210,6 @@ function getIO() {
 
 module.exports = {
   initSocket,
-  getIO
+  getIO,
+  isUserOnline
 };
