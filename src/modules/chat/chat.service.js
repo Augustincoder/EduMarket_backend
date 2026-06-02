@@ -40,7 +40,13 @@ async function sendMessage(taskId, senderId, data) {
       fileId: data.fileId,
       fileType: data.fileType,
       fileName: data.fileName,
+      replyToId: data.replyToId,
       isRead: false
+    },
+    include: {
+      replyTo: {
+        select: { id: true, content: true, fileType: true, sender: { select: { fullname: true } } }
+      }
     }
   });
 
@@ -94,6 +100,9 @@ async function getMessages(taskId, userId, cursor, limit = 50) {
     include: {
       sender: {
         select: { id: true, fullname: true, avatarUrl: true }
+      },
+      replyTo: {
+        select: { id: true, content: true, fileType: true, sender: { select: { fullname: true } } }
       }
     }
   });
@@ -200,9 +209,57 @@ async function getConversations(userId) {
   return result;
 }
 
+/**
+ * Edit a message
+ */
+async function editMessage(messageId, userId, newContent) {
+  const message = await prisma.chatMessage.findUnique({ where: { id: messageId } });
+  if (!message) throw new AppError('Xabar topilmadi', 404);
+  if (message.senderId !== userId) throw new AppError('Faqat o\'zingizning xabaringizni tahrirlashingiz mumkin', 403);
+  if (message.isDeleted) throw new AppError('O\'chirilgan xabarni tahrirlab bo\'lmaydi', 400);
+
+  const updatedMessage = await prisma.chatMessage.update({
+    where: { id: messageId },
+    data: { content: newContent, isEdited: true, editedAt: new Date() },
+    include: {
+      replyTo: { select: { id: true, content: true, fileType: true, sender: { select: { fullname: true } } } }
+    }
+  });
+
+  try {
+    const io = getIO();
+    io.to(`task_${message.taskId}`).emit('message_edited', updatedMessage);
+  } catch (err) {}
+
+  return updatedMessage;
+}
+
+/**
+ * Delete a message
+ */
+async function deleteMessage(messageId, userId) {
+  const message = await prisma.chatMessage.findUnique({ where: { id: messageId } });
+  if (!message) throw new AppError('Xabar topilmadi', 404);
+  if (message.senderId !== userId) throw new AppError('Faqat o\'zingizning xabaringizni o\'chirishingiz mumkin', 403);
+
+  const deletedMessage = await prisma.chatMessage.update({
+    where: { id: messageId },
+    data: { isDeleted: true, deletedAt: new Date(), content: null }
+  });
+
+  try {
+    const io = getIO();
+    io.to(`task_${message.taskId}`).emit('message_deleted', { messageId, taskId: message.taskId });
+  } catch (err) {}
+
+  return deletedMessage;
+}
+
 module.exports = {
   sendMessage,
   getMessages,
   markAsRead,
-  getConversations
+  getConversations,
+  editMessage,
+  deleteMessage
 };

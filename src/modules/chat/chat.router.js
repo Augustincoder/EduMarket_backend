@@ -5,7 +5,7 @@ const { asyncHandler } = require('../../middleware/errorHandler');
 
 // GET /api/v1/chat/:taskId - Get messages for a task
 const { validate } = require('../../middleware/validate');
-const { sendMessageSchema } = require('./chat.schema');
+const { sendMessageSchema, editMessageSchema } = require('./chat.schema');
 
 router.use(requireAuth);
 
@@ -24,5 +24,18 @@ router.post(
 
 // POST /api/v1/chat/:taskId/read
 router.post('/:taskId/read', asyncHandler(chatController.markAsRead));
+
+// PUT /api/v1/chat/messages/:messageId
+router.put(
+  '/messages/:messageId',
+  validate(editMessageSchema, 'body'),
+  asyncHandler(chatController.editMessage)
+);
+
+// DELETE /api/v1/chat/messages/:messageId
+router.delete(
+  '/messages/:messageId',
+  asyncHandler(chatController.deleteMessage)
+);
 
 module.exports = router;

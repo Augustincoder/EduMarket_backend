@@ -114,41 +114,55 @@ async function autoCompleted(task) {
     `✅ <b>"${task.title}"</b> vazifasi avtomatik yakunlandi.\n` +
     `(Mijoz 48 soat ichida javob bermadi)`;
 
-  if (task.freelancer) await sendTelegramMessage(task.freelancer.telegramId.toString(), msg);
-  if (task.client) await sendTelegramMessage(task.client.telegramId.toString(), msg);
+  if (task.freelancer && await shouldSendNotification(task.freelancer.id, 'taskStatusChanged')) {
+    await sendTelegramMessage(task.freelancer.telegramId.toString(), msg);
+  }
+  if (task.client && await shouldSendNotification(task.client.id, 'taskStatusChanged')) {
+    await sendTelegramMessage(task.client.telegramId.toString(), msg);
+  }
 }
 
 async function disputeOpened(task, dispute) {
   const msgClient = `⚠️ <b>Nizo ochildi</b>\n\n<b>"${task.title}"</b> vazifasi bo'yicha nizo ochildi. Admin tez orada ko'rib chiqadi.`;
   const msgAdmin = `🚨 <b>Yangi nizo!</b>\n\nVazifa ID: ${task.id}\nOchuvchi ID: ${dispute.openedByUserId}\nSabab: ${dispute.reason}`;
 
-  if (task.client) await sendTelegramMessage(task.client.telegramId.toString(), msgClient);
-  if (task.freelancer) await sendTelegramMessage(task.freelancer.telegramId.toString(), msgClient);
+  if (task.client && await shouldSendNotification(task.client.id, 'taskStatusChanged')) {
+    await sendTelegramMessage(task.client.telegramId.toString(), msgClient);
+  }
+  if (task.freelancer && await shouldSendNotification(task.freelancer.id, 'taskStatusChanged')) {
+    await sendTelegramMessage(task.freelancer.telegramId.toString(), msgClient);
+  }
   // Optional: send to admin channel or all admins
 }
 
 async function disputeResolved(task, dispute, winner) {
   const msg = `⚖️ <b>Nizo hal qilindi</b>\n\n<b>"${task.title}"</b> vazifasi bo'yicha nizo <b>${winner === 'CLIENT' ? 'MIJOZ' : 'IJROCHI'}</b> foydasiga hal qilindi.\n\nIzoh: ${dispute.adminNotes || 'Izohsiz'}`;
   
-  if (task.client) await sendTelegramMessage(task.client.telegramId.toString(), msg);
-  if (task.freelancer) await sendTelegramMessage(task.freelancer.telegramId.toString(), msg);
+  if (task.client && await shouldSendNotification(task.client.id, 'taskStatusChanged')) {
+    await sendTelegramMessage(task.client.telegramId.toString(), msg);
+  }
+  if (task.freelancer && await shouldSendNotification(task.freelancer.id, 'taskStatusChanged')) {
+    await sendTelegramMessage(task.freelancer.telegramId.toString(), msg);
+  }
 }
 
 async function taskCompleted(task) {
   const msgFreelancer = `✅ <b>Vazifa qabul qilindi</b>\n\n<b>"${task.title}"</b> vazifasi muvaffaqiyatli qabul qilindi! To'lov o'tkaziladi.`;
   const msgClient = `✅ <b>Vazifa yakunlandi</b>\n\n<b>"${task.title}"</b> vazifasi yakunlandi. Hamkorlik uchun rahmat!`;
   
-  if (task.freelancer) {
+  if (task.freelancer && await shouldSendNotification(task.freelancer.id, 'taskStatusChanged')) {
     sendTelegramMessage(task.freelancer.telegramId.toString(), msgFreelancer).catch(e => logger.error(e));
   }
-  if (task.client) {
+  if (task.client && await shouldSendNotification(task.client.id, 'taskStatusChanged')) {
     sendTelegramMessage(task.client.telegramId.toString(), msgClient).catch(e => logger.error(e));
   }
 }
 
 async function revisionRequested(task, note) {
   const msg = `🔄 <b>Qayta ishlash so'raldi</b>\n\n<b>"${task.title}"</b> vazifasini mijoz qayta ishlashga qaytardi.\n\nIzoh: ${note || 'Izohsiz'}`;
-  if (task.freelancer) await sendTelegramMessage(task.freelancer.telegramId.toString(), msg);
+  if (task.freelancer && await shouldSendNotification(task.freelancer.id, 'taskStatusChanged')) {
+    await sendTelegramMessage(task.freelancer.telegramId.toString(), msg);
+  }
 }
 
 async function smartMatchNotify(freelancer, task) {

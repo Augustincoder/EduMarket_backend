@@ -61,9 +61,42 @@ async function markAsRead(req, res) {
   });
 }
 
+/**
+ * Edit a message
+ */
+async function editMessage(req, res) {
+  const messageId = req.params.messageId;
+  const userId = req.user.userId;
+  const { content } = req.body;
+  
+  const updatedMessage = await chatService.editMessage(messageId, userId, content);
+  
+  res.json({
+    success: true,
+    data: updatedMessage
+  });
+}
+
+/**
+ * Delete a message
+ */
+async function deleteMessage(req, res) {
+  const messageId = req.params.messageId;
+  const userId = req.user.userId;
+  
+  const deletedMessage = await chatService.deleteMessage(messageId, userId);
+  
+  res.json({
+    success: true,
+    data: deletedMessage
+  });
+}
+
 module.exports = {
   sendMessage,
   getMessages,
   getConversations,
-  markAsRead
+  markAsRead,
+  editMessage,
+  deleteMessage
 };
