@@ -46,8 +46,24 @@ async function getConversations(req, res) {
   });
 }
 
+/**
+ * Mark all unread messages as read
+ */
+async function markAsRead(req, res) {
+  const taskId = req.params.taskId;
+  const userId = req.user.userId;
+
+  const result = await chatService.markAsRead(taskId, userId);
+
+  res.json({
+    success: true,
+    data: result
+  });
+}
+
 module.exports = {
   sendMessage,
   getMessages,
-  getConversations
+  getConversations,
+  markAsRead
 };

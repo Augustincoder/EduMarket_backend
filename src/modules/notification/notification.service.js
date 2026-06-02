@@ -135,8 +135,15 @@ async function disputeResolved(task, dispute, winner) {
 }
 
 async function taskCompleted(task) {
-  const msg = `✅ <b>Vazifa qabul qilindi</b>\n\n<b>"${task.title}"</b> vazifasi muvaffaqiyatli qabul qilindi! To'lov o'tkaziladi.`;
-  if (task.freelancer) await sendTelegramMessage(task.freelancer.telegramId.toString(), msg);
+  const msgFreelancer = `✅ <b>Vazifa qabul qilindi</b>\n\n<b>"${task.title}"</b> vazifasi muvaffaqiyatli qabul qilindi! To'lov o'tkaziladi.`;
+  const msgClient = `✅ <b>Vazifa yakunlandi</b>\n\n<b>"${task.title}"</b> vazifasi yakunlandi. Hamkorlik uchun rahmat!`;
+  
+  if (task.freelancer) {
+    sendTelegramMessage(task.freelancer.telegramId.toString(), msgFreelancer).catch(e => logger.error(e));
+  }
+  if (task.client) {
+    sendTelegramMessage(task.client.telegramId.toString(), msgClient).catch(e => logger.error(e));
+  }
 }
 
 async function revisionRequested(task, note) {

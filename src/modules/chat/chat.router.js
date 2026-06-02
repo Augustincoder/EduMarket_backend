@@ -22,4 +22,7 @@ router.post(
   asyncHandler(chatController.sendMessage)
 );
 
+// POST /api/v1/chat/:taskId/read
+router.post('/:taskId/read', asyncHandler(chatController.markAsRead));
+
 module.exports = router;

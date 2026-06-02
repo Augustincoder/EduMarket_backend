@@ -76,10 +76,15 @@ async function updateProfile(userId, data) {
 async function getLeaderboard() {
   // Sort by highest rating sum, then highest task completed count
   const topUsers = await prisma.user.findMany({
-    where: { ratingCount: { gt: 0 } },
+    where: { 
+      isFreelancer: true,
+      isBanned: false,
+      deletedAt: null
+    },
     orderBy: [
       { ratingSum: 'desc' },
-      { ratingCount: 'desc' }
+      { ratingCount: 'desc' },
+      { createdAt: 'desc' }
     ],
     take: 10,
     select: {

@@ -104,10 +104,17 @@ async function getMessages(taskId, userId, cursor, limit = 50) {
     .map(m => m.id);
 
   if (unreadMessageIds.length > 0) {
-    // Non-blocking update (fire and forget)
+    // Update and emit socket event
     prisma.chatMessage.updateMany({
       where: { id: { in: unreadMessageIds } },
       data: { isRead: true }
+    }).then(() => {
+      try {
+        const io = getIO();
+        io.to(`task_${taskId}`).emit('messages_read', { taskId, readerId: userId, messageIds: unreadMessageIds });
+      } catch (e) {
+        // socket not initialized
+      }
     }).catch(err => console.error('Failed to mark messages read', err));
   }
 
@@ -117,6 +124,34 @@ async function getMessages(taskId, userId, cursor, limit = 50) {
     messages,
     nextCursor
   };
+}
+
+/**
+ * Mark all unread messages in a task chat as read
+ */
+async function markAsRead(taskId, userId) {
+  await checkChatAccess(taskId, userId);
+
+  const unreadMessages = await prisma.chatMessage.findMany({
+    where: { taskId, isRead: false, senderId: { not: userId } },
+    select: { id: true }
+  });
+
+  if (unreadMessages.length === 0) return { count: 0 };
+
+  const messageIds = unreadMessages.map(m => m.id);
+
+  await prisma.chatMessage.updateMany({
+    where: { id: { in: messageIds } },
+    data: { isRead: true }
+  });
+
+  try {
+    const io = getIO();
+    io.to(`task_${taskId}`).emit('messages_read', { taskId, readerId: userId, messageIds });
+  } catch (err) {}
+
+  return { count: messageIds.length };
 }
 
 /**
@@ -168,5 +203,6 @@ async function getConversations(userId) {
 module.exports = {
   sendMessage,
   getMessages,
+  markAsRead,
   getConversations
 };
