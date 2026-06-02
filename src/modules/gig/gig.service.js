@@ -8,7 +8,7 @@ const { TASK_STATUS } = require('../task/task.stateMachine');
  * Only experienced or VIP users can create gigs
  */
 async function createGig(userId, data) {
-  const { title, description, price, deliveryDays } = data;
+  const { title, description, price, deliveryDays, category } = data;
 
   // Quality check: User must be VIP or have completed at least 3 tasks
   const user = await prisma.user.findUnique({
@@ -28,7 +28,8 @@ async function createGig(userId, data) {
       title,
       description,
       price,
-      deliveryDays
+      deliveryDays,
+      category
     }
   });
 }
@@ -104,7 +105,7 @@ async function orderGig(gigId, clientId) {
       data: {
         clientId,
         freelancerId: gig.freelancerId,
-        category: 'BOSHQA', // Generic category for gigs
+        category: gig.category || 'BOSHQA', // Use gig's category
         title: `GIG ORDER: ${gig.title}`,
         description: `Mijoz quyidagi xizmatni katalogdan sotib oldi:\n\n${gig.description}`,
         priceMin: gig.price,

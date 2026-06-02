@@ -34,6 +34,11 @@ async function getProfile(userId) {
       freelancerBio: true,
       freelancerExperience: true,
       createdAt: true,
+      _count: {
+        select: {
+          freelancerTasks: { where: { status: 'COMPLETED' } }
+        }
+      },
       portfolioItems: {
         select: {
           id: true,

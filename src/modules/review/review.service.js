@@ -25,9 +25,12 @@ async function createReview(taskId, fromUserId, data) {
     throw new AppError('Faqat yakunlangan vazifalar uchun baho qoldirish mumkin', 400);
   }
 
-  // Determine who is being reviewed
+  // Determine who is being reviewed and ensure counterpart exists
   let toUserId;
   if (fromUserId === task.clientId) {
+    if (!task.freelancerId) {
+      throw new AppError('Freelancer hali tayinlanmagan, baho qoldirish mumkin emas', 400);
+    }
     toUserId = task.freelancerId;
   } else if (fromUserId === task.freelancerId) {
     toUserId = task.clientId;

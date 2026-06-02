@@ -115,13 +115,7 @@ async function acceptBid(taskId, bidId, clientId) {
     const bid = await tx.bid.findUnique({ where: { id: bidId } });
     if (!bid || bid.taskId !== taskId) throw new AppError('Taklif topilmadi', 404);
 
-    // 1. Mark bid as accepted
-    await tx.bid.update({
-      where: { id: bidId },
-      data: { isAccepted: true }
-    });
-
-    // 2. Update task state atomically using updateMany to prevent race conditions
+    // 1. Update task state atomically using updateMany to prevent race conditions
     const agreedPrice = bid.counterAccepted ? (bid.counterPrice || bid.proposedPrice) : bid.proposedPrice;
     
     const updateResult = await tx.task.updateMany({
@@ -140,6 +134,12 @@ async function acceptBid(taskId, bidId, clientId) {
     if (updateResult.count === 0) {
       throw new AppError('Ushbu vazifa allaqachon boshqa ijrochiga tayinlangan yoki yopilgan', 400);
     }
+
+    // 2. Mark bid as accepted
+    await tx.bid.update({
+      where: { id: bidId },
+      data: { isAccepted: true }
+    });
 
     // Retrieve the actual updated task
     const updatedTask = await tx.task.findUnique({
@@ -182,15 +182,43 @@ async function createCounterOffer(bidId, clientId, data) {
  * Freelancer accepts counter-offer (Phase 14)
  */
 async function acceptCounterOffer(bidId, freelancerId) {
-  const bid = await prisma.bid.findUnique({ where: { id: bidId } });
+  const bid = await prisma.bid.findUnique({ where: { id: bidId }, include: { task: true } });
   
   if (!bid) throw new AppError('Taklif topilmadi', 404);
   if (bid.freelancerId !== freelancerId) throw new AppError('Ruxsat yo\'q', 403);
   if (!bid.counterPrice) throw new AppError('Counter-offer mavjud emas', 400);
 
-  return prisma.bid.update({
-    where: { id: bidId },
-    data: { counterAccepted: true }
+  // Ensure task is still open
+  if (bid.task.status !== TASK_STATUS.OPEN) {
+    throw new AppError('Vazifa ochiq emas', 400);
+  }
+
+  return prisma.$transaction(async (tx) => {
+    // Update task to assigned state with agreed price
+    const updateResult = await tx.task.updateMany({
+      where: { id: bid.taskId, status: TASK_STATUS.OPEN },
+      data: {
+        status: TASK_STATUS.ASSIGNED,
+        freelancerId: freelancerId,
+        agreedPrice: bid.counterPrice,
+        assignedAt: new Date()
+      }
+    });
+    if (updateResult.count === 0) {
+      throw new AppError('Vazifa allaqachon tayinlangan yoki yopilgan', 400);
+    }
+
+    // Mark counter offer as accepted
+    await tx.bid.update({
+      where: { id: bidId },
+      data: { counterAccepted: true }
+    });
+
+    // Notify client about assignment
+    await notificationService.notifyTaskAssigned(freelancerId, bid.task.title, bid.taskId);
+
+    // Return updated task
+    return tx.task.findUnique({ where: { id: bid.taskId } });
   });
 }
 

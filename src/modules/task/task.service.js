@@ -3,6 +3,7 @@ const { AppError } = require('../../middleware/errorHandler');
 const { TASK_STATUS, validateTransition } = require('./task.stateMachine');
 const { getIO, isUserOnline } = require('../../config/socket');
 const notificationService = require('../notification/notification.service');
+const logger = require('../../utils/logger');
 
 /**
  * Creates a new task
@@ -51,7 +52,7 @@ async function createTask(clientId, data) {
         );
       }
     } catch (err) {
-      console.error('Smart match notification error:', err);
+      logger.error(`Smart match notification error: ${err.message}`);
     }
   });
 
@@ -311,7 +312,7 @@ async function acceptDelivery(taskId, clientId) {
       }
     }
   } catch (err) {
-    console.error('Referral bonus error:', err);
+    logger.error(`Referral bonus error: ${err.message}`);
   }
 
   await notificationService.taskCompleted(updatedTask);

@@ -35,12 +35,11 @@ const requireAuth = asyncHandler(async (req, res, next) => {
 
     // Ensure user still exists and is not banned
     const userIdStr = String(decoded.userId);
-    const user = await prisma.user.findUnique({
+    let user = await prisma.user.findUnique({
       where: { id: userIdStr },
-      select: { id: true, role: true, isBanned: true }
+      select: { id: true, role: true, isBanned: true, isVip: true, vipExpiresAt: true }
     });
-
-    if (!user) {
+      if (!user) {
       throw new AppError('Foydalanuvchi topilmadi', 404, 'USER_NOT_FOUND');
     }
 
@@ -48,8 +47,16 @@ const requireAuth = asyncHandler(async (req, res, next) => {
       throw new AppError('Hisobingiz bloklangan', 403, 'USER_BANNED');
     }
 
+    // Check if VIP expired
+    if (user.isVip && user.vipExpiresAt && new Date(user.vipExpiresAt) < new Date()) {
+      user = await prisma.user.update({
+        where: { id: user.id },
+        data: { isVip: false, vipExpiresAt: null }
+      });
+    }
+
     // Attach user payload to request with stringified ID
-    req.user = { ...decoded, userId: userIdStr };
+    req.user = { ...decoded, userId: userIdStr, isVip: user.isVip, vipExpiresAt: user.vipExpiresAt };
     
     // Attach the actual token to req.token so we can blacklist it on logout
     req.token = token;

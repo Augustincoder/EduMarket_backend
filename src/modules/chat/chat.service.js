@@ -1,6 +1,7 @@
 const prisma = require('../../config/prisma');
 const { AppError } = require('../../middleware/errorHandler');
-const { getIO, isUserOnline } = require('../../config/socket');
+const { getIO, isUserOnline, getOnlineUsersSet } = require('../../config/socket');
+const logger = require('../../utils/logger');
 
 /**
  * Validates if a user has access to a task's chat
@@ -72,11 +73,11 @@ async function sendMessage(taskId, senderId, data) {
         const senderName = sender ? sender.fullname : 'Foydalanuvchi';
         const notificationService = require('../notification/notification.service');
         notificationService.notifyChatMessage(recipientId, senderName, taskId)
-          .catch(err => console.error('Failed to send Telegram notification:', err));
+          .catch(err => logger.error(`Failed to send Telegram notification: ${err.message}`));
       }
     }
   } catch (err) {
-    console.error('Failed offline notification check:', err);
+    logger.error(`Failed offline notification check: ${err.message}`);
   }
 
   return message;
@@ -124,7 +125,7 @@ async function getMessages(taskId, userId, cursor, limit = 50) {
       } catch (e) {
         // socket not initialized
       }
-    }).catch(err => console.error('Failed to mark messages read', err));
+    }).catch(err => logger.error(`Failed to mark messages read: ${err.message}`));
   }
 
   const nextCursor = messages.length === limit ? messages[messages.length - 1].id : null;
@@ -190,11 +191,13 @@ async function getConversations(userId) {
     orderBy: { updatedAt: 'desc' }
   });
   
-  const result = await Promise.all(tasks.map(async (task) => {
+  const onlineUsers = await getOnlineUsersSet();
+  
+  const result = tasks.map((task) => {
     const otherUser = task.clientId === userId ? task.freelancer : task.client;
     let otherUserOnline = false;
     if (otherUser) {
-      otherUserOnline = await isUserOnline(otherUser.id);
+      otherUserOnline = onlineUsers.has(otherUser.id);
     }
     return {
       taskId:       task.id,
@@ -204,7 +207,7 @@ async function getConversations(userId) {
       lastMessage:  task.chat[0] || null,
       unreadCount:  task._count.chat,
     };
-  }));
+  });
 
   return result;
 }

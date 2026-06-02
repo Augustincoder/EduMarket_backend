@@ -53,6 +53,11 @@ async function loginWithTelegram(initData, ipAddress, referralCode = null) {
   const isNewUser = !user;
 
   if (user) {
+    // 5. Check if user is banned
+    if (user.isBanned) {
+      throw new AppError(`Hisobingiz bloklangan. Sabab: ${user.banReason || 'Ko\'rsatilmagan'}`, 403, 'USER_BANNED');
+    }
+
     // Calculate Streak & XP
     const now = new Date();
     let newStreak = user.streakCount || 0;
@@ -106,11 +111,6 @@ async function loginWithTelegram(initData, ipAddress, referralCode = null) {
         xp: 50
       }
     });
-  }
-  
-  // 5. Check if user is banned
-  if (user.isBanned) {
-    throw new AppError(`Hisobingiz bloklangan. Sabab: ${user.banReason || 'Ko\'rsatilmagan'}`, 403, 'USER_BANNED');
   }
   
   // 6. Generate JWT

@@ -56,7 +56,7 @@ async function notifyNewBid(taskClientId, freelancerName, bidAmount, taskId) {
   if (!client) return;
 
   const text = `📬 <b>Yangi taklif!</b>\n\n<b>${freelancerName}</b> sizning vazifangizga <b>${bidAmount} so'm</b> taklif qildi.`;
-  const keyboard = [[{ text: "Vazifani ko'rish", web_app: { url: `https://t.me/your_bot_username/app?startapp=task_${taskId}` } }]];
+  const keyboard = [[{ text: "Vazifani ko'rish", web_app: { url: `https://t.me/${env.BOT_USERNAME}/app?startapp=task_${taskId}` } }]];
 
   await sendTelegramMessage(client.telegramId.toString(), text, keyboard);
 }
@@ -68,7 +68,7 @@ async function notifyTaskAssigned(freelancerId, taskTitle, taskId) {
   if (!freelancer) return;
 
   const text = `🎉 <b>Tabriklaymiz!</b>\n\nSiz <b>"${taskTitle}"</b> vazifasini bajarish uchun tanlandingiz!`;
-  const keyboard = [[{ text: "Vazifani ko'rish", web_app: { url: `https://t.me/your_bot_username/app?startapp=task_${taskId}` } }]];
+  const keyboard = [[{ text: "Vazifani ko'rish", web_app: { url: `https://t.me/${env.BOT_USERNAME}/app?startapp=task_${taskId}` } }]];
 
   await sendTelegramMessage(freelancer.telegramId.toString(), text, keyboard);
 }
@@ -80,7 +80,7 @@ async function notifyChatMessage(recipientId, senderName, taskId) {
   if (!recipient) return;
 
   const text = `💬 <b>Yangi xabar</b>\n\n<b>${senderName}</b> vazifa bo'yicha sizga xabar yubordi.`;
-  const keyboard = [[{ text: "Chatni ochish", web_app: { url: `https://t.me/your_bot_username/app?startapp=chat_${taskId}` } }]];
+  const keyboard = [[{ text: "Chatni ochish", web_app: { url: `https://t.me/${env.BOT_USERNAME}/app?startapp=chat_${taskId}` } }]];
 
   await sendTelegramMessage(recipient.telegramId.toString(), text, keyboard);
 }
@@ -92,7 +92,7 @@ async function notifyDeadlineApproaching(freelancerId, taskTitle, taskId) {
   if (!freelancer) return;
 
   const text = `⏰ <b>Muddat yaqinlashmoqda!</b>\n\n<b>"${taskTitle}"</b> vazifasini topshirish muddati tugashiga 24 soatdan kam vaqt qoldi.`;
-  const keyboard = [[{ text: "Vazifani ko'rish", web_app: { url: `https://t.me/your_bot_username/app?startapp=task_${taskId}` } }]];
+  const keyboard = [[{ text: "Vazifani ko'rish", web_app: { url: `https://t.me/${env.BOT_USERNAME}/app?startapp=task_${taskId}` } }]];
 
   await sendTelegramMessage(freelancer.telegramId.toString(), text, keyboard);
 }
@@ -167,7 +167,7 @@ async function revisionRequested(task, note) {
 
 async function smartMatchNotify(freelancer, task) {
   const text = `🎯 <b>Sizga mos yangi ish chiqdi!</b>\n\n<b>"${task.title}"</b>\nKategoriya: ${task.category}\nNarx: ${task.priceMin} - ${task.priceMax} so'm\n\nVIP mutaxassis bo'lganingiz uchun sizga ushbu xabar hammadan oldin yuborildi. Darhol taklif qoldiring!`;
-  const keyboard = [[{ text: "Vazifani ko'rish", web_app: { url: `https://t.me/your_bot_username/app?startapp=task_${task.id}` } }]];
+  const keyboard = [[{ text: "Vazifani ko'rish", web_app: { url: `https://t.me/${env.BOT_USERNAME}/app?startapp=task_${task.id}` } }]];
   await sendTelegramMessage(freelancer.telegramId.toString(), text, keyboard);
 }
 

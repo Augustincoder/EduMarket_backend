@@ -19,7 +19,13 @@ async function logAction(adminId, action, details) {
 /**
  * Get system statistics
  */
+let statsCache = null;
+let statsCacheTime = 0;
+
 async function getStats() {
+  if (statsCache && Date.now() - statsCacheTime < 5 * 60 * 1000) {
+    return statsCache;
+  }
   const [userCount, taskCount, completedTasks, pendingVip, pendingReports, openDisputes, pendingStudentVerifications] = await Promise.all([
     prisma.user.count(),
     prisma.task.count(),
@@ -50,7 +56,7 @@ async function getStats() {
     });
   }
 
-  return {
+  statsCache = {
     users: userCount,
     tasks: {
       total: taskCount,
@@ -62,6 +68,9 @@ async function getStats() {
     pendingStudentVerifications,
     chartData
   };
+  
+  statsCacheTime = Date.now();
+  return statsCache;
 }
 
 /**
@@ -154,11 +163,20 @@ async function getOpenDisputes(limit = 50, cursor = null) {
           client: { select: { id: true, fullname: true, username: true } },
           freelancer: { select: { id: true, fullname: true, username: true } }
         }
-      },
-      openedBy: { select: { id: true, fullname: true, username: true } }
+      }
     },
     orderBy: { createdAt: 'asc' }
   });
+
+  // Manually attach openedBy
+  for (const dispute of disputes) {
+    if (dispute.openedByUserId) {
+      dispute.openedBy = await prisma.user.findUnique({
+        where: { id: dispute.openedByUserId },
+        select: { id: true, fullname: true, username: true }
+      });
+    }
+  }
 
   let nextCursor = null;
   if (disputes.length > limit) {

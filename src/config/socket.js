@@ -96,10 +96,25 @@ async function isUserOnline(userId) {
  * Initialize Socket.io Server and attach to HTTP server
  */
 function initSocket(httpServer) {
+  // Import env config inside initSocket or define it above
+  const env = require('../config/env');
+  const ALWAYS_ALLOWED = [
+    'https://web.telegram.org',
+    'https://telegram.org',
+    'https://webk.telegram.org',
+    'https://webz.telegram.org',
+  ];
+  const allowedOrigins = [
+    ...ALWAYS_ALLOWED,
+    ...env.ALLOWED_ORIGINS,
+    ...(env.isDev ? ['http://localhost:5173', 'http://localhost:3000'] : []),
+  ];
+
   io = new Server(httpServer, {
     cors: {
-      origin: '*', // Allow TMA frontend
-      methods: ['GET', 'POST']
+      origin: allowedOrigins,
+      methods: ['GET', 'POST'],
+      credentials: true
     }
   });
 
@@ -208,8 +223,31 @@ function getIO() {
   return io;
 }
 
+/**
+ * Get all online users as a Set (checks local and Redis)
+ */
+async function getOnlineUsersSet() {
+  const onlineUsers = new Set();
+  
+  if (pubClient.isOpen) {
+    try {
+      const members = await pubClient.sMembers('online_users');
+      members.forEach(id => onlineUsers.add(id));
+    } catch (err) {
+      logger.error(`Redis getOnlineUsersSet error: ${err.message}`);
+    }
+  } else {
+    for (const userId of localConnections.keys()) {
+      onlineUsers.add(userId);
+    }
+  }
+  
+  return onlineUsers;
+}
+
 module.exports = {
   initSocket,
   getIO,
-  isUserOnline
+  isUserOnline,
+  getOnlineUsersSet
 };

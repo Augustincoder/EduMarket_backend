@@ -104,7 +104,7 @@ model User {
   portfolioIds String[] @default([]) @map("portfolio_ids") // Telegram file_ids
   badge        String   @default("YANGI") // YANGI|ISHONCHLI|PRO|ELITE
 
-  // в”Ђв”Ђ Onboarding & Freelancer (v2.0) в”Ђв”Ђ
+  // ── Onboarding & Freelancer (v2.0) ──
   isOnboardingComplete Boolean  @default(false) @map("is_onboarding_complete")
   isFreelancer         Boolean  @default(false) @map("is_freelancer")
   freelancerCategories String[] @default([])    @map("freelancer_categories")
@@ -119,39 +119,39 @@ model User {
   studentCardFileId    String?  @map("student_card_file_id")
   isVerifiedStudent    Boolean  @default(false) @map("is_verified_student")
 
-  // в”Ђв”Ђ Analytics (Phase 14) в”Ђв”Ђ
+  // ── Analytics (Phase 14) ──
   completionRate Float?   @map("completion_rate") // hisoblangan: scheduler
   avgResponseHrs Float?   @map("avg_response_hrs")
 
-  // в”Ђв”Ђ Gamification & Retention (Phase 5) в”Ђв”Ђ
+  // ── Gamification & Retention (Phase 5) ──
   streakCount    Int       @default(0) @map("streak_count")
   lastLoginDate  DateTime? @map("last_login_date")
   xp             Int       @default(0) @map("xp")
   achievements   Json      @default("[]") @map("achievements")
 
-  // в”Ђв”Ђ Referral (Phase 14 & Phase 5) в”Ђв”Ђ
+  // ── Referral (Phase 14 & Phase 5) ──
   referralCode   String?  @unique @map("referral_code")
   referredBy     String?  @map("referred_by")
   referralEarned Float    @default(0) @map("referral_earned")
 
-  // в”Ђв”Ђ Notification preferences (Phase 14) в”Ђв”Ђ
+  // ── Notification preferences (Phase 14) ──
   notifPrefs Json @default("{}") @map("notif_prefs")
   // { "newBid": true, "chatMessage": true, "deadlineReminder": true,
   //   "taskAssigned": true, "reviewReminder": true }
 
-  // в”Ђв”Ђ Anti-fraud в”Ђв”Ђ
+  // ── Anti-fraud ──
   lastIpAddress String?  @map("last_ip_address")
   deviceHash    String?  @map("device_hash")
   isBanned      Boolean  @default(false) @map("is_banned")
   banReason     String?  @map("ban_reason")
 
-  // в”Ђв”Ђ Soft delete в”Ђв”Ђ
+  // ── Soft delete ──
   deletedAt DateTime? @map("deleted_at")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  // в”Ђв”Ђ Relations в”Ђв”Ђ
+  // ── Relations ──
   clientTasks     Task[]    @relation("ClientTasks")
   freelancerTasks Task[]    @relation("FreelancerTasks")
   bids            Bid[]
@@ -172,7 +172,7 @@ model User {
   @@map("users")
 }
 
-// в”Ђв”Ђв”Ђ TASK в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+// ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 model Task {
   id String @id @default(cuid())
@@ -189,27 +189,27 @@ model Task {
   deadline     DateTime     @map("deadline")
   status       TaskStatus   @default(OPEN)
 
-  // в”Ђв”Ђ File attachments (Telegram file_id strings) в”Ђв”Ђ
+  // ── File attachments (Telegram file_id strings) ──
   attachmentFileIds String[] @default([]) @map("attachment_file_ids")
 
-  // в”Ђв”Ђ Urgency (Phase 14) в”Ђв”Ђ
+  // ── Urgency (Phase 14) ──
   isUrgent Boolean @default(false) @map("is_urgent")
   rushFee  Int     @default(0)     @map("rush_fee")
 
-  // в”Ђв”Ђ State transition timestamps (for anti-fraud 24h check) в”Ђв”Ђ
+  // ── State transition timestamps (for anti-fraud 24h check) ──
   assignedAt   DateTime? @map("assigned_at")
   inProgressAt DateTime? @map("in_progress_at")
   inReviewAt   DateTime? @map("in_review_at")
   completedAt  DateTime? @map("completed_at")
   canceledAt   DateTime? @map("canceled_at")
 
-  // в”Ђв”Ђ Soft delete в”Ђв”Ђ
+  // ── Soft delete ──
   deletedAt DateTime? @map("deleted_at")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  // в”Ђв”Ђ Relations в”Ђв”Ђ
+  // ── Relations ──
   client     User         @relation("ClientTasks", fields: [clientId], references: [id])
   freelancer User?        @relation("FreelancerTasks", fields: [freelancerId], references: [id])
   bids       Bid[]
@@ -229,7 +229,7 @@ model Task {
   @@map("tasks")
 }
 
-// в”Ђв”Ђв”Ђ BID в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+// ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 model Bid {
   id String @id @default(cuid())
@@ -240,7 +240,7 @@ model Bid {
   proposedPrice Int     @map("proposed_price")
   isAccepted    Boolean @default(false) @map("is_accepted")
 
-  // в”Ђв”Ђ Counter-offer (Phase 14) в”Ђв”Ђ
+  // ── Counter-offer (Phase 14) ──
   counterPrice   Int?      @map("counter_price")
   counterMessage String?   @db.Text @map("counter_message")
   counterAt      DateTime? @map("counter_at")
@@ -248,7 +248,7 @@ model Bid {
 
   createdAt DateTime @default(now()) @map("created_at")
 
-  // в”Ђв”Ђ Relations в”Ђв”Ђ
+  // ── Relations ──
   task       Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
   freelancer User @relation(fields: [freelancerId], references: [id])
 
@@ -257,7 +257,7 @@ model Bid {
   @@map("bids")
 }
 
-// в”Ђв”Ђв”Ђ CHAT MESSAGE в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+// ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 model ChatMessage {
   id String @id @default(cuid())
@@ -269,7 +269,7 @@ model ChatMessage {
   fileType String? @map("file_type")  // "document" | "photo" | "video"
   fileName String? @map("file_name")
 
-  // в”Ђв”Ђ Reply, Edit, Delete (Stage 6: Chat & Notifications) в”Ђв”Ђ
+  // ── Reply, Edit, Delete (Stage 6: Chat & Notifications) ──
   replyToId String?       @map("reply_to_id")
   replyTo   ChatMessage?  @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
   replies   ChatMessage[] @relation("MessageReplies")
@@ -282,7 +282,7 @@ model ChatMessage {
   isRead    Boolean  @default(false) @map("is_read")
   createdAt DateTime @default(now()) @map("created_at")
 
-  // в”Ђв”Ђ Relations в”Ђв”Ђ
+  // ── Relations ──
   task   Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
   sender User @relation("SentMessages", fields: [senderId], references: [id])
 
@@ -293,7 +293,7 @@ model ChatMessage {
   @@map("chat_messages")
 }
 
-// в”Ђв”Ђв”Ђ REVIEW в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+// ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 model Review {
   id String @id @default(cuid())
@@ -301,7 +301,7 @@ model Review {
   fromUserId String @map("from_user_id")
   toUserId   String @map("to_user_id")
 
-  rating  Int    // 1вЂ“5 (enforced in app layer)
+  rating  Int    // 1–5 (enforced in app layer)
   comment String @db.Text
 
   // Anti-fraud: only counts if IN_PROGRESS >= 24h
@@ -309,7 +309,7 @@ model Review {
 
   createdAt DateTime @default(now()) @map("created_at")
 
-  // в”Ђв”Ђ Relations в”Ђв”Ђ
+  // ── Relations ──
   task     Task @relation(fields: [taskId], references: [id])
   fromUser User @relation("ReviewsGiven", fields: [fromUserId], references: [id])
   toUser   User @relation("ReviewsReceived", fields: [toUserId], references: [id])
@@ -320,7 +320,7 @@ model Review {
   @@map("reviews")
 }
 
-// в”Ђв”Ђв”Ђ VIP PAYMENT в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+// ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 model VipPayment {
   id String @id @default(cuid())
@@ -338,7 +338,7 @@ model VipPayment {
 
   createdAt DateTime @default(now()) @map("created_at")
 
-  // в”Ђв”Ђ Relations в”Ђв”Ђ
+  // ── Relations ──
   user User @relation(fields: [userId], references: [id])
 
   @@index([isApproved])
@@ -346,7 +346,7 @@ model VipPayment {
   @@map("vip_payments")
 }
 
-// в”Ђв”Ђв”Ђ DISPUTE в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+// ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 model Dispute {
   id String @id @default(cuid())
@@ -362,14 +362,14 @@ model Dispute {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  // в”Ђв”Ђ Relations в”Ђв”Ђ
+  // ── Relations ──
   task Task @relation(fields: [taskId], references: [id])
 
   @@index([status])
   @@map("disputes")
 }
 
-// в”Ђв”Ђв”Ђ TRANSACTION LOG в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+// ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 model TransactionLog {
   id String @id @default(cuid())
@@ -384,7 +384,7 @@ model TransactionLog {
 
   createdAt DateTime @default(now()) @map("created_at")
 
-  // в”Ђв”Ђ Relations в”Ђв”Ђ
+  // ── Relations ──
   user User @relation(fields: [userId], references: [id])
 
   @@index([userId])
@@ -393,7 +393,7 @@ model TransactionLog {
   @@map("transaction_logs")
 }
 
-// в”Ђв”Ђв”Ђ FRAUD LOG в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+// ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 model FraudLog {
   id String @id @default(cuid())
@@ -411,7 +411,7 @@ model FraudLog {
   @@map("fraud_logs")
 }
 
-// в”Ђв”Ђв”Ђ SAVED TASK (Phase 14) в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+// ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 model SavedTask {
   userId    String      @map("user_id")
@@ -425,13 +425,14 @@ model SavedTask {
   @@map("saved_tasks")
 }
 
-// в”Ђв”Ђв”Ђ GIG (Phase 15) в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+// ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 model Gig {
-  id String @id @default(cuid())
-  freelancerId String      @map("freelancer_id")
-  title        String   @db.VarChar(200)
-  description  String   @db.Text
+  id           String       @id @default(cuid())
+  freelancerId String       @map("freelancer_id")
+  category     TaskCategory @default(BOSHQA)
+  title        String       @db.VarChar(200)
+  description  String       @db.Text
   price        Int
   deliveryDays Int      @map("delivery_days")
   isActive     Boolean  @default(true) @map("is_active")
