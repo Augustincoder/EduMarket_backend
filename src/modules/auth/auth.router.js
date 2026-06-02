@@ -15,6 +15,13 @@ router.post(
   asyncHandler(authController.login)
 );
 
+// POST /api/v1/auth/admin-login
+router.post(
+  '/admin-login',
+  authRateLimiter,
+  asyncHandler(authController.adminLogin)
+);
+
 // POST /api/v1/auth/logout
 router.post(
   '/logout',

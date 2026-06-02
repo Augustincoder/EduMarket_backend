@@ -64,8 +64,34 @@ async function me(req, res) {
   });
 }
 
+/**
+ * Login admin via username and password
+ */
+async function adminLogin(req, res) {
+  const { username, password } = req.body;
+
+  const { user, token } = await authService.loginAsAdmin(username, password);
+
+  res.cookie('token', token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'none',
+    maxAge: 7 * 24 * 60 * 60 * 1000
+  });
+
+  res.json({
+    success: true,
+    message: 'Admin panelga muvaffaqiyatli kirdingiz',
+    data: {
+      user,
+      token
+    }
+  });
+}
+
 module.exports = {
   login,
   logout,
-  me
+  me,
+  adminLogin
 };

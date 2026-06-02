@@ -107,6 +107,140 @@ async function resolveDispute(req, res) {
   });
 }
 
+/**
+ * Get all users with filters and search
+ */
+async function getUsers(req, res) {
+  const filters = {
+    role: req.query.role,
+    isVip: req.query.isVip,
+    isBanned: req.query.isBanned,
+    search: req.query.search
+  };
+  const users = await adminService.getUsers(filters);
+  res.json({ success: true, data: users });
+}
+
+/**
+ * Update user VIP status directly
+ */
+async function setUserVip(req, res) {
+  const targetUserId = req.params.userId;
+  const { isVip, durationDays } = req.body;
+
+  const user = await adminService.setUserVipStatus(req.user.userId, targetUserId, isVip, durationDays);
+  res.json({ success: true, message: 'Foydalanuvchi VIP statusi o\'zgartirildi', data: user });
+}
+
+/**
+ * Send warning message to user
+ */
+async function warnUser(req, res) {
+  const targetUserId = req.params.userId;
+  const { message } = req.body;
+
+  if (!message) {
+    throw new AppError('Ogohlantirish xabari bo\'sh bo\'lishi mumkin emas', 400);
+  }
+
+  await adminService.warnUser(req.user.userId, targetUserId, message);
+  res.json({ success: true, message: 'Ogohlantirish yuborildi' });
+}
+
+/**
+ * Verify student request status
+ */
+async function verifyStudent(req, res) {
+  const targetUserId = req.params.userId;
+  const { isApproved, rejectReason } = req.body;
+
+  if (!isApproved && !rejectReason) {
+    throw new AppError('Rad etish sababini ko\'rsatish majburiy', 400);
+  }
+
+  const user = await adminService.verifyStudentStatus(req.user.userId, targetUserId, isApproved, rejectReason);
+  res.json({ success: true, message: isApproved ? 'Talaba arizasi tasdiqlandi' : 'Talaba arizasi rad etildi', data: user });
+}
+
+/**
+ * Get chat messages for dispute
+ */
+async function getDisputeChat(req, res) {
+  const disputeId = req.params.id;
+  const chat = await adminService.getDisputeChat(disputeId);
+  res.json({ success: true, data: chat });
+}
+
+/**
+ * Get all transaction history
+ */
+async function getTransactions(req, res) {
+  const transactions = await adminService.getTransactions();
+  res.json({ success: true, data: transactions });
+}
+
+/**
+ * Get system settings
+ */
+async function getSettings(req, res) {
+  const settings = await adminService.getSettings();
+  res.json({ success: true, data: settings });
+}
+
+/**
+ * Update system setting
+ */
+async function updateSetting(req, res) {
+  const { key, value } = req.body;
+
+  if (!key || value === undefined) {
+    throw new AppError('Kalit va qiymat majburiy', 400);
+  }
+
+  const setting = await adminService.updateSetting(req.user.userId, key, value);
+  res.json({ success: true, message: 'Sozlama saqlandi', data: setting });
+}
+
+/**
+ * Get audit logs
+ */
+async function getAuditLogs(req, res) {
+  const logs = await adminService.getAuditLogs();
+  res.json({ success: true, data: logs });
+}
+
+/**
+ * Broadcast mass Telegram message
+ */
+async function broadcastMessage(req, res) {
+  const { targetType, text } = req.body;
+
+  if (!targetType || !text) {
+    throw new AppError('Guruh va matn majburiy', 400);
+  }
+
+  const result = await adminService.broadcastMessage(req.user.userId, targetType, text);
+  res.json({ success: true, message: `Xabar yuborish boshlandi. Jami: ${result.sentCount} ta foydalanuvchi` });
+}
+
+/**
+ * Delete task (moderator)
+ */
+async function deleteTask(req, res) {
+  const taskId = req.params.taskId;
+  await adminService.deleteTask(req.user.userId, taskId);
+  res.json({ success: true, message: 'Vazifa o\'chirildi/bekor qilindi' });
+}
+
+/**
+ * Delete gig (moderator)
+ */
+async function deleteGig(req, res) {
+  const gigId = req.params.gigId;
+  await adminService.deleteGig(req.user.userId, gigId);
+  res.json({ success: true, message: 'Xizmat (gig) o\'chirildi' });
+}
+
 module.exports = {
   getStats,
   setUserBan,
@@ -115,5 +249,17 @@ module.exports = {
   getFraudLogs,
   resolveFraudLog,
   getDisputes,
-  resolveDispute
+  resolveDispute,
+  getUsers,
+  setUserVip,
+  warnUser,
+  verifyStudent,
+  getDisputeChat,
+  getTransactions,
+  getSettings,
+  updateSetting,
+  getAuditLogs,
+  broadcastMessage,
+  deleteTask,
+  deleteGig
 };

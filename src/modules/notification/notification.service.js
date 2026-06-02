@@ -168,6 +168,17 @@ async function notifyAdminsVerifyStudent(user, fileId) {
   }
 }
 
+async function notifyWarning(userId, message) {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { telegramId: true } });
+  if (!user) return;
+  const text = `⚠️ <b>Ogohlantirish!</b>\n\n${message}`;
+  await sendTelegramMessage(user.telegramId.toString(), text);
+}
+
+async function notifyBroadcast(telegramId, text) {
+  await sendTelegramMessage(telegramId.toString(), text);
+}
+
 module.exports = {
   notifyNewBid,
   notifyTaskAssigned,
@@ -181,5 +192,7 @@ module.exports = {
   revisionRequested,
   smartMatchNotify,
   referralBonusNotify,
-  notifyAdminsVerifyStudent
+  notifyAdminsVerifyStudent,
+  notifyWarning,
+  notifyBroadcast
 };

@@ -98,4 +98,42 @@ async function loginWithTelegram(initData, ipAddress, referralCode = null) {
   return { user: safeUser, token, isNewUser };
 }
 
-module.exports = { loginWithTelegram };
+/**
+ * Login admin using username and password
+ */
+async function loginAsAdmin(username, password) {
+  if (username !== 'admin' || password !== 'admin@123') {
+    throw new AppError('Noto\'g\'ri login yoki parol', 401, 'INVALID_CREDENTIALS');
+  }
+
+  let user = await prisma.user.findFirst({
+    where: { username: 'admin', role: 'ADMIN' }
+  });
+
+  if (!user) {
+    user = await prisma.user.create({
+      data: {
+        telegramId: BigInt(0),
+        username: 'admin',
+        fullname: 'System Admin',
+        role: 'ADMIN',
+        isOnboardingComplete: true
+      }
+    });
+  }
+
+  const token = generateToken({
+    userId: user.id,
+    role: user.role
+  });
+
+  return {
+    user: {
+      ...user,
+      telegramId: user.telegramId.toString()
+    },
+    token
+  };
+}
+
+module.exports = { loginWithTelegram, loginAsAdmin };

@@ -469,3 +469,26 @@ model Report {
   @@index([status])
   @@map("reports")
 }
+
+// ─── ADMIN LOG (v2.0) ──────────────────────────────────────────────────────────
+
+model AdminLog {
+  id        String   @id @default(cuid())
+  adminId   String   @map("admin_id")
+  action    String
+  details   String   @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([adminId])
+  @@map("admin_logs")
+}
+
+// ─── SYSTEM SETTING (v2.0) ──────────────────────────────────────────────────────
+
+model SystemSetting {
+  key       String   @id
+  value     String   @db.Text
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("system_settings")
+}
