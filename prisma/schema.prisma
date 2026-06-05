@@ -80,6 +80,13 @@ enum ReportStatus {
   DISMISSED
 }
 
+enum VerificationStatus {
+  NOT_SUBMITTED
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 // в”Ђв”Ђв”Ђ USER в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
 model User {
@@ -118,6 +125,7 @@ model User {
   studyYear            Int?     @map("study_year")
   studentCardFileId    String?  @map("student_card_file_id")
   isVerifiedStudent    Boolean  @default(false) @map("is_verified_student")
+  verificationStatus   VerificationStatus @default(REJECTED) @map("verification_status") // REJECTED here acts as 'NOT_SUBMITTED' initially if status is PENDING/APPROVED
 
   // ── Analytics (Phase 14) ──
   completionRate Float?   @map("completion_rate") // hisoblangan: scheduler
@@ -166,6 +174,7 @@ model User {
   portfolioItems  PortfolioItem[]
   reportsSubmitted Report[] @relation("ReporterRelation")
   reportsReceived  Report[] @relation("ReportedRelation")
+  verificationRequests VerificationRequest[]
 
   @@index([isBanned])
   @@index([isVip])
@@ -513,4 +522,27 @@ model SystemSetting {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("system_settings")
+}
+
+model VerificationRequest {
+  id String @id @default(cuid())
+  userId String @map("user_id")
+
+  documentType    String  @map("document_type") // "PASSPORT" | "STUDENT_ID" | "DRIVER_LICENSE"
+  documentFileId  String  @map("document_file_id")
+  selfieFileId    String  @map("selfie_file_id")
+  
+  status         VerificationStatus @default(PENDING)
+  adminNote      String? @db.Text @map("admin_note")
+  resolvedAt     DateTime? @map("resolved_at")
+  resolvedBy     String?   @map("resolved_by")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+  @@map("verification_requests")
 }

@@ -203,6 +203,8 @@ async function getConversations(userId) {
       taskId:       task.id,
       taskTitle:    task.title,
       taskStatus:   task.status,
+      clientId:     task.clientId,
+      freelancerId: task.freelancerId,
       otherUser:    otherUser ? { ...otherUser, isOnline: otherUserOnline } : null,
       lastMessage:  task.chat[0] || null,
       unreadCount:  task._count.chat,
