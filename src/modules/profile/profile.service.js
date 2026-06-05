@@ -5,7 +5,7 @@ const { AppError } = require('../../middleware/errorHandler');
  * Get user profile data
  */
 async function getProfile(userId) {
-  const user = await prisma.user.findUnique({
+  let user = await prisma.user.findUnique({
     where: { id: userId },
     select: {
       id: true,
@@ -51,7 +51,59 @@ async function getProfile(userId) {
   });
 
   if (!user) throw new AppError('Foydalanuvchi topilmadi', 404);
+
+  // Fallback for older users missing a referral code
+  if (!user.referralCode) {
+    const code = require('crypto').randomBytes(4).toString('hex');
+    const updated = await prisma.user.update({
+      where: { id: userId },
+      data: { referralCode: code },
+      select: { referralCode: true }
+    });
+    user.referralCode = updated.referralCode;
+  }
+
   return user;
+}
+
+/**
+ * Get user's referral stats and list
+ */
+async function getReferrals(userId) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      referralCode: true,
+      referralEarned: true,
+      referredUsers: {
+        select: {
+          id: true,
+          fullname: true,
+          avatarUrl: true,
+          isFreelancer: true,
+          createdAt: true
+        }
+      }
+    }
+  });
+
+  if (!user) throw new AppError('Foydalanuvchi topilmadi', 404);
+
+  // If code is missing, generate it (extra safety)
+  if (!user.referralCode) {
+    user.referralCode = require('crypto').randomBytes(4).toString('hex');
+    await prisma.user.update({
+      where: { id: userId },
+      data: { referralCode: user.referralCode }
+    });
+  }
+
+  return {
+    referralCode: user.referralCode,
+    referralEarned: user.referralEarned || 0,
+    totalReferrals: user.referredUsers?.length || 0,
+    referredUsers: user.referredUsers || []
+  };
 }
 
 /**

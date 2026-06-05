@@ -22,7 +22,11 @@ const ALLOWED_TYPES = [
   'audio/webm',
   'audio/ogg',
   'audio/mp3',
-  'audio/mpeg'
+  'audio/mpeg',
+  'audio/mp4',
+  'audio/aac',
+  'audio/x-m4a',
+  'video/mp4' // Some browsers use video/mp4 for audio-only recordings
 ];
 
 /**

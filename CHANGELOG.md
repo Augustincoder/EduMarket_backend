@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-06-05
+
+### Added
+- **Referral Generation Fallback**: Implemented automated referral code generation in `getProfile` and `getReferrals` for legacy users.
+- **Stability**: Added `getReferrals` service implementation to support frontend referral tracking features.
+
+### Changed
+- **Cross-Platform Audio Support**: Expanded `ALLOWED_TYPES` whitelist to include `audio/mp4`, `audio/aac`, and `video/mp4` to support native iOS voice recordings.
+
 ## [1.0.0] - 2026-06-05
 
 ### Added
