@@ -74,22 +74,13 @@ async function getReferrals(userId) {
     where: { id: userId },
     select: {
       referralCode: true,
-      referralEarned: true,
-      referredUsers: {
-        select: {
-          id: true,
-          fullname: true,
-          avatarUrl: true,
-          isFreelancer: true,
-          createdAt: true
-        }
-      }
+      referralEarned: true
     }
   });
 
   if (!user) throw new AppError('Foydalanuvchi topilmadi', 404);
 
-  // If code is missing, generate it (extra safety)
+  // If code is missing, generate it
   if (!user.referralCode) {
     user.referralCode = require('crypto').randomBytes(4).toString('hex');
     await prisma.user.update({
@@ -98,11 +89,24 @@ async function getReferrals(userId) {
     });
   }
 
+  // Fetch referred users manually since relation doesn't exist in schema
+  const referredUsers = await prisma.user.findMany({
+    where: { referredBy: user.referralCode },
+    select: {
+      id: true,
+      fullname: true,
+      avatarUrl: true,
+      isFreelancer: true,
+      createdAt: true
+    },
+    orderBy: { createdAt: 'desc' }
+  });
+
   return {
     referralCode: user.referralCode,
     referralEarned: user.referralEarned || 0,
-    totalReferrals: user.referredUsers?.length || 0,
-    referredUsers: user.referredUsers || []
+    totalReferrals: referredUsers.length,
+    referredUsers
   };
 }
 
