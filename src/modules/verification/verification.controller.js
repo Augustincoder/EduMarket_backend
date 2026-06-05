@@ -1,26 +1,26 @@
 const verificationService = require('./verification.service');
-const { catchAsync } = require('../../middleware/errorHandler');
+const { asyncHandler } = require('../../middleware/errorHandler');
 
 /**
  * Submit verification
  */
-const submit = catchAsync(async (req, res) => {
-  const result = await verificationService.submitRequest(req.user.id, req.body);
+const submit = asyncHandler(async (req, res) => {
+  const result = await verificationService.submitRequest(req.user.userId, req.body);
   res.json({ success: true, data: result });
 });
 
 /**
  * Get my status
  */
-const getMyStatus = catchAsync(async (req, res) => {
-  const result = await verificationService.getMyRequest(req.user.id);
+const getMyStatus = asyncHandler(async (req, res) => {
+  const result = await verificationService.getMyRequest(req.user.userId);
   res.json({ success: true, data: result });
 });
 
 /**
  * Admin: List requests
  */
-const adminList = catchAsync(async (req, res) => {
+const adminList = asyncHandler(async (req, res) => {
   const { status, page, limit } = req.query;
   const result = await verificationService.getAllRequests({ status }, Number(page) || 1, Number(limit) || 20);
   res.json({ success: true, data: result });
@@ -29,9 +29,9 @@ const adminList = catchAsync(async (req, res) => {
 /**
  * Admin: Resolve
  */
-const adminResolve = catchAsync(async (req, res) => {
+const adminResolve = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const result = await verificationService.resolveRequest(id, req.user.id, req.body);
+  const result = await verificationService.resolveRequest(id, req.user.userId, req.body);
   res.json({ success: true, data: result });
 });
 

@@ -1,15 +1,16 @@
 const express = require('express');
 const router = express.Router();
 const verificationController = require('./verification.controller');
-const { protect, restrictTo } = require('../../middleware/auth');
+const { requireAuth } = require('../../middleware/auth');
+const { requireAdmin } = require('../../middleware/adminOnly');
 
 // User routes
-router.use(protect);
+router.use(requireAuth);
 router.post('/submit', verificationController.submit);
 router.get('/my-status', verificationController.getMyStatus);
 
 // Admin routes
-router.use(restrictTo('ADMIN'));
+router.use(requireAdmin);
 router.get('/admin/list', verificationController.adminList);
 router.post('/admin/resolve/:id', verificationController.adminResolve);
 
