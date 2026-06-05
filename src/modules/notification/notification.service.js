@@ -2,6 +2,7 @@ const { getBot } = require('../../config/bot');
 const prisma = require('../../config/prisma');
 const logger = require('../../utils/logger');
 const env = require('../../config/env');
+const { admin } = require('../../config/firebase');
 
 /**
  * Helper to check user notification preferences
@@ -9,17 +10,18 @@ const env = require('../../config/env');
 async function shouldSendNotification(userId, prefKey) {
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { notifPrefs: true }
+    select: { notifPrefs: true, pushToken: true }
   });
 
-  if (!user || !user.notifPrefs) return true; // Default true if no prefs set
+  if (!user) return { shouldSend: true, pushToken: null };
 
+  const notifPrefs = user.notifPrefs || {};
   // If preference explicitly set to false, don't send
-  if (user.notifPrefs[prefKey] === false) {
-    return false;
+  if (notifPrefs[prefKey] === false) {
+    return { shouldSend: false, pushToken: user.pushToken };
   }
 
-  return true;
+  return { shouldSend: true, pushToken: user.pushToken };
 }
 
 /**
@@ -47,54 +49,107 @@ async function sendTelegramMessage(telegramId, text, inlineKeyboard = null) {
   }
 }
 
+/**
+ * Helper to send Firebase Push Notification
+ */
+async function sendPushNotification(token, title, body, data = {}) {
+  if (!token) return false;
+
+  try {
+    const message = {
+      notification: { title, body },
+      data: {
+        ...data,
+        click_action: 'FLUTTER_NOTIFICATION_CLICK', // Legacy but still used by some libs
+      },
+      token
+    };
+
+    await admin.messaging().send(message);
+    return true;
+  } catch (err) {
+    if (err.code === 'messaging/registration-token-not-registered') {
+      logger.warn(`Push token no longer valid. Removing...`);
+      // Optionally remove from DB
+    } else {
+      logger.error(`Firebase Push error: ${err.message}`);
+    }
+    return false;
+  }
+}
+
 // ─── Notification Methods ──────────────────────────────────────────────────────
 
 async function notifyNewBid(taskClientId, freelancerName, bidAmount, taskId) {
-  if (!(await shouldSendNotification(taskClientId, 'newBid'))) return;
+  const { shouldSend, pushToken } = await shouldSendNotification(taskClientId, 'newBid');
+  if (!shouldSend) return;
 
   const client = await prisma.user.findUnique({ where: { id: taskClientId }, select: { telegramId: true } });
   if (!client) return;
 
-  const text = `📬 <b>Yangi taklif!</b>\n\n<b>${freelancerName}</b> sizning vazifangizga <b>${bidAmount} so'm</b> taklif qildi.`;
+  const title = "📬 Yangi taklif!";
+  const text = `<b>${freelancerName}</b> sizning vazifangizga <b>${bidAmount} so'm</b> taklif qildi.`;
   const keyboard = [[{ text: "Vazifani ko'rish", web_app: { url: `https://t.me/${env.BOT_USERNAME}/app?startapp=task_${taskId}` } }]];
 
   await sendTelegramMessage(client.telegramId.toString(), text, keyboard);
+  
+  if (pushToken) {
+    await sendPushNotification(pushToken, title, text.replace(/<[^>]*>?/gm, ''), { taskId, type: 'new_bid' });
+  }
 }
 
 async function notifyTaskAssigned(freelancerId, taskTitle, taskId) {
-  if (!(await shouldSendNotification(freelancerId, 'taskAssigned'))) return;
+  const { shouldSend, pushToken } = await shouldSendNotification(freelancerId, 'taskAssigned');
+  if (!shouldSend) return;
 
   const freelancer = await prisma.user.findUnique({ where: { id: freelancerId }, select: { telegramId: true } });
   if (!freelancer) return;
 
-  const text = `🎉 <b>Tabriklaymiz!</b>\n\nSiz <b>"${taskTitle}"</b> vazifasini bajarish uchun tanlandingiz!`;
+  const title = "🎉 Tabriklaymiz!";
+  const text = `Siz <b>"${taskTitle}"</b> vazifasini bajarish uchun tanlandingiz!`;
   const keyboard = [[{ text: "Vazifani ko'rish", web_app: { url: `https://t.me/${env.BOT_USERNAME}/app?startapp=task_${taskId}` } }]];
 
   await sendTelegramMessage(freelancer.telegramId.toString(), text, keyboard);
+
+  if (pushToken) {
+    await sendPushNotification(pushToken, title, text.replace(/<[^>]*>?/gm, ''), { taskId, type: 'task_assigned' });
+  }
 }
 
 async function notifyChatMessage(recipientId, senderName, taskId) {
-  if (!(await shouldSendNotification(recipientId, 'chatMessage'))) return;
+  const { shouldSend, pushToken } = await shouldSendNotification(recipientId, 'chatMessage');
+  if (!shouldSend) return;
 
   const recipient = await prisma.user.findUnique({ where: { id: recipientId }, select: { telegramId: true } });
   if (!recipient) return;
 
-  const text = `💬 <b>Yangi xabar</b>\n\n<b>${senderName}</b> vazifa bo'yicha sizga xabar yubordi.`;
+  const title = "💬 Yangi xabar";
+  const text = `<b>${senderName}</b> vazifa bo'yicha sizga xabar yubordi.`;
   const keyboard = [[{ text: "Chatni ochish", web_app: { url: `https://t.me/${env.BOT_USERNAME}/app?startapp=chat_${taskId}` } }]];
 
   await sendTelegramMessage(recipient.telegramId.toString(), text, keyboard);
+
+  if (pushToken) {
+    await sendPushNotification(pushToken, title, text.replace(/<[^>]*>?/gm, ''), { taskId, type: 'chat_message' });
+  }
 }
 
 async function notifyDeadlineApproaching(freelancerId, taskTitle, taskId) {
-  if (!(await shouldSendNotification(freelancerId, 'deadlineReminder'))) return;
+  const { shouldSend, pushToken } = await shouldSendNotification(freelancerId, 'deadlineReminder');
+  if (!shouldSend) return;
 
   const freelancer = await prisma.user.findUnique({ where: { id: freelancerId }, select: { telegramId: true } });
   if (!freelancer) return;
 
-  const text = `⏰ <b>Muddat yaqinlashmoqda!</b>\n\n<b>"${taskTitle}"</b> vazifasini topshirish muddati tugashiga 24 soatdan kam vaqt qoldi.`;
+  const title = "⏰ Muddat yaqinlashmoqda!";
+  const text = `<b>"${taskTitle}"</b> vazifasini topshirish muddati tugashiga 24 soatdan kam vaqt qoldi.`;
   const keyboard = [[{ text: "Vazifani ko'rish", web_app: { url: `https://t.me/${env.BOT_USERNAME}/app?startapp=task_${taskId}` } }]];
 
   await sendTelegramMessage(freelancer.telegramId.toString(), text, keyboard);
+
+  if (pushToken) {
+    await sendPushNotification(pushToken, title, text.replace(/<[^>]*>?/gm, ''), { taskId, type: 'deadline' });
+  }
 }
 
 async function notifyReviewReceived(recipientId, senderName, rating, taskId) {

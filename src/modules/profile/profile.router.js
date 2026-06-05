@@ -19,6 +19,9 @@ router.get('/me', requireAuth, asyncHandler(profileController.getMyProfile));
 // GET /api/v1/users/me/referrals
 router.get('/me/referrals', requireAuth, asyncHandler(profileController.getMyReferrals));
 
+// POST /api/v1/users/me/push-token
+router.post('/me/push-token', requireAuth, asyncHandler(profileController.updatePushToken));
+
 // PUT /api/v1/users/me
 router.put('/me', validate(updateProfileSchema, 'body'), asyncHandler(profileController.updateMyProfile));
 

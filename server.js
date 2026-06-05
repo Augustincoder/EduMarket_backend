@@ -26,6 +26,7 @@ const prisma = require('./src/config/prisma');
 // ── STEP 6: Redis & Socket.io ─────────────────────────────────────────────────
 const { connectRedis } = require('./src/config/redis');
 const { initSocket } = require('./src/config/socket');
+const { initFirebase } = require('./src/config/firebase');
 
 // ─── Uncaught error handlers ──────────────────────────────────────────────────
 // These are last-resort guards. Ideally, all errors are caught by asyncHandler.
@@ -60,6 +61,9 @@ async function start() {
   try {
     // Connect to Redis for Pub/Sub
     await connectRedis();
+
+    // Initialize Firebase
+    initFirebase();
 
     // Initialize bot (lazy — won't crash if Telegram is unreachable)
     getBot();

@@ -161,6 +161,27 @@ async function getMyTasks(userId, filters) {
 }
 
 /**
+ * Promote a task to top of listings
+ */
+async function promoteTask(taskId, clientId, durationDays = 3) {
+  const task = await prisma.task.findUnique({ where: { id: taskId } });
+  
+  if (!task) throw new AppError('Vazifa topilmadi', 404);
+  if (task.clientId !== clientId) throw new AppError('Ruxsat yo\'q', 403);
+  if (task.status !== TASK_STATUS.OPEN) throw new AppError('Faqat ochiq vazifalarni ko\'tarish mumkin', 400);
+
+  // In real app, check user balance and deduct fee here
+  
+  const promotedUntil = new Date();
+  promotedUntil.setDate(promotedUntil.getDate() + parseInt(durationDays, 10));
+
+  return prisma.task.update({
+    where: { id: taskId },
+    data: { promotedUntil }
+  });
+}
+
+/**
  * List tasks using cursor-based pagination (Phase 13 improvement)
  */
 async function listTasks(filters) {
@@ -197,7 +218,10 @@ async function listTasks(filters) {
   const tasks = await prisma.task.findMany({
     where,
     take: limit + 1,
-    orderBy: { id: 'desc' },
+    orderBy: [
+      { promotedUntil: { sort: 'desc', nulls: 'last' } }, // Promoted tasks first
+      { createdAt: 'desc' }
+    ],
     include: {
       client: {
         select: { id: true, fullname: true, isVip: true, badge: true }

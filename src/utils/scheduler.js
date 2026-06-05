@@ -57,6 +57,25 @@ function initScheduler() {
     calculateBadges();
   });
 
+  // 3. Clear expired task promotions: Runs every hour
+  cron.schedule('0 * * * *', async () => {
+    try {
+      const prisma = require('../config/prisma');
+      const now = new Date();
+      
+      const result = await prisma.task.updateMany({
+        where: { promotedUntil: { lt: now } },
+        data: { promotedUntil: null }
+      });
+
+      if (result.count > 0) {
+        logger.info(`Cleared ${result.count} expired task promotions.`);
+      }
+    } catch (err) {
+      logger.error(`Promotion cleanup scheduler error: ${err.message}`);
+    }
+  });
+
   // Phase 14: Escrow timeout checker would be added here
 
   logger.info('Job scheduler initialized successfully.');

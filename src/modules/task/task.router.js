@@ -45,6 +45,13 @@ router.post(
   asyncHandler(taskController.startProgress)
 );
 
+// POST /api/v1/tasks/:id/promote - Client promotes task
+router.post(
+  '/:id/promote',
+  requireAuth,
+  asyncHandler(taskController.promoteTask)
+);
+
 // POST /api/v1/tasks/:id/submit-review - Freelancer submits for review
 router.post(
   '/:id/submit-review',

@@ -116,8 +116,19 @@ async function getLeaderboard() {
   return topUsers;
 }
 
+/**
+ * Update user's push token for FCM
+ */
+async function updatePushToken(userId, pushToken) {
+  return prisma.user.update({
+    where: { id: userId },
+    data: { pushToken }
+  });
+}
+
 module.exports = {
   getProfile,
   updateProfile,
-  getLeaderboard
+  getLeaderboard,
+  updatePushToken
 };

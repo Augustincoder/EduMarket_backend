@@ -53,10 +53,20 @@ async function getMyReferrals(req, res) {
   });
 }
 
+/**
+ * Update user's push token for FCM
+ */
+async function updatePushToken(req, res) {
+  const { token } = req.body;
+  await profileService.updatePushToken(req.user.userId, token);
+  res.json({ success: true, message: 'Push token yangilandi' });
+}
+
 module.exports = {
   getMyProfile,
   updateMyProfile,
   getUserProfile,
   getLeaderboard,
-  getMyReferrals
+  getMyReferrals,
+  updatePushToken
 };

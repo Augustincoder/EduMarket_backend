@@ -136,6 +136,7 @@ model User {
 
   // ── Notification preferences (Phase 14) ──
   notifPrefs Json @default("{}") @map("notif_prefs")
+  pushToken  String? @map("push_token")
   // { "newBid": true, "chatMessage": true, "deadlineReminder": true,
   //   "taskAssigned": true, "reviewReminder": true }
 
@@ -195,6 +196,7 @@ model Task {
   // ── Urgency (Phase 14) ──
   isUrgent Boolean @default(false) @map("is_urgent")
   rushFee  Int     @default(0)     @map("rush_fee")
+  promotedUntil DateTime? @map("promoted_until")
 
   // ── State transition timestamps (for anti-fraud 24h check) ──
   assignedAt   DateTime? @map("assigned_at")

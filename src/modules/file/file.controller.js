@@ -18,7 +18,11 @@ const ALLOWED_TYPES = [
   'application/x-rar-compressed',
   'text/plain',
   'application/json',
-  'text/csv'
+  'text/csv',
+  'audio/webm',
+  'audio/ogg',
+  'audio/mp3',
+  'audio/mpeg'
 ];
 
 /**

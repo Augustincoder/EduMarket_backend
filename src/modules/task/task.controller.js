@@ -36,6 +36,14 @@ async function startProgress(req, res) {
   res.json({ success: true, message: 'Vazifa bajarilishi boshlandi', data: task });
 }
 
+async function promoteTask(req, res) {
+  const taskId = req.params.id;
+  const { durationDays } = req.body;
+  const task = await taskService.promoteTask(taskId, req.user.userId, durationDays);
+  await clearCache(`/api/v1/tasks*`);
+  res.json({ success: true, message: 'Vazifa muvaffaqiyatli ko\'tarildi', data: task });
+}
+
 async function submitTask(req, res) {
   const taskId = req.params.id;
   const task = await taskService.submitForReview(taskId, req.user.userId);
