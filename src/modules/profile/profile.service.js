@@ -36,6 +36,7 @@ async function getProfile(userId) {
       freelancerCategories: true,
       freelancerBio: true,
       freelancerExperience: true,
+      isOnboardingComplete: true,
       createdAt: true,
       _count: {
         select: {
