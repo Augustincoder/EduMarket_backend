@@ -1,83 +1,188 @@
-const { getBot } = require('../../config/bot');
+const { PutObjectCommand, GetObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
+const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
+const { v4: uuidv4 } = require('uuid');
+const r2Client = require('../../config/r2');
 const env = require('../../config/env');
 const { AppError } = require('../../middleware/errorHandler');
+const logger = require('../../utils/logger');
+
+// ─── Helpers ───────────────────────────────────────────────────────────────────
 
 /**
- * Upload a file to Telegram's private channel and return its file_id
- * 
+ * Determine file extension from MIME type.
+ * Falls back to .bin for unknown types.
+ */
+function getExtension(mimeType) {
+  const map = {
+    'image/jpeg':        'jpg',
+    'image/png':         'png',
+    'image/gif':         'gif',
+    'image/webp':        'webp',
+    'application/pdf':   'pdf',
+    'application/msword':'doc',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+    'application/vnd.ms-excel': 'xls',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+    'application/vnd.ms-powerpoint': 'ppt',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx',
+    'application/zip':   'zip',
+    'application/x-rar-compressed': 'rar',
+    'text/plain':        'txt',
+    'text/csv':          'csv',
+    'application/json':  'json',
+    'audio/webm':        'webm',
+    'audio/ogg':         'ogg',
+    'audio/mpeg':        'mp3',
+    'audio/mp3':         'mp3',
+    'audio/mp4':         'm4a',
+    'audio/aac':         'aac',
+    'audio/x-m4a':       'm4a',
+    'video/mp4':         'mp4',
+  };
+  return map[mimeType] || 'bin';
+}
+
+/**
+ * Generate a unique, safe object key for R2.
+ * Format: uploads/<year>/<month>/<uuid>.<ext>
+ * This keeps the bucket organized and avoids collisions.
+ *
+ * @param {string} mimeType - File MIME type
+ * @param {string} originalName - Original filename (for logging only)
+ * @returns {string} R2 object key
+ */
+function generateObjectKey(mimeType, originalName) {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const ext = getExtension(mimeType);
+  const id = uuidv4();
+  return `uploads/${year}/${month}/${id}.${ext}`;
+}
+
+// ─── Core Storage Functions ────────────────────────────────────────────────────
+
+/**
+ * Upload a file buffer to Cloudflare R2.
+ * Returns the R2 object key (stored in DB as the "fileId").
+ *
  * @param {Buffer} buffer - File data
  * @param {string} filename - Original filename
  * @param {string} mimeType - File MIME type
- * @returns {string} Telegram file_id
+ * @returns {string} R2 object key (e.g. "uploads/2026/06/uuid.pdf")
  */
-async function uploadFileToTelegram(buffer, filename, mimeType) {
-  if (!env.BOT_STORAGE_CHANNEL_ID || env.BOT_STORAGE_CHANNEL_ID === '-100xxxxxxxxxx') {
-    throw new AppError('Telegram storage channel sozlanmagan', 500);
-  }
+async function uploadFile(buffer, filename, mimeType) {
+  const objectKey = generateObjectKey(mimeType, filename);
 
   try {
-    const formData = new FormData();
-    formData.append('chat_id', env.BOT_STORAGE_CHANNEL_ID);
-    formData.append('document', new Blob([buffer], { type: mimeType }), filename);
+    await r2Client.send(new PutObjectCommand({
+      Bucket:      env.R2_BUCKET_NAME,
+      Key:         objectKey,
+      Body:        buffer,
+      ContentType: mimeType,
+      // Store original filename as metadata for display purposes
+      Metadata: {
+        'original-name': encodeURIComponent(filename),
+      },
+    }));
 
-    const res = await fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/sendDocument`, {
-      method: 'POST',
-      body: formData
-    });
-
-    if (!res.ok) {
-      const errorText = await res.text();
-      throw new Error(`Telegram API Error: ${errorText}`);
-    }
-
-    const data = await res.json();
-    return data.result.document.file_id;
+    logger.info(`[R2] Uploaded: ${objectKey} (${buffer.length} bytes, ${mimeType})`);
+    return objectKey;
   } catch (err) {
+    logger.error(`[R2] Upload error for key "${objectKey}": ${err.message}`);
     throw new AppError(`Fayl yuklashda xatolik: ${err.message}`, 500);
   }
 }
 
 /**
- * Get file link from Telegram by file_id
- * 
- * @param {string} fileId - Telegram file_id
- * @returns {string} Temporary download URL (valid for 1 hour)
+ * Get a download URL for an R2 object.
+ *
+ * Strategy:
+ * - Images (image/*) → Public CDN URL via R2 public bucket (permanent, fast, no auth)
+ * - All other files  → Presigned S3 URL (1-hour expiry, requires signed request)
+ *
+ * This balances performance (images load fast without presigning round-trip)
+ * with security (documents require authentication to download).
+ *
+ * @param {string} objectKey - R2 object key (stored as "fileId" in DB)
+ * @param {number} expiresIn - Presigned URL expiry in seconds (default: 3600 = 1 hour)
+ * @returns {string} Download URL
  */
-async function getFileUrl(fileId) {
+async function getFileUrl(objectKey, expiresIn = 3600) {
+  if (!objectKey) {
+    throw new AppError('objectKey ko\'rsatilmagan', 400);
+  }
+
   try {
-    const bot = getBot();
-    const file = await bot.getFile(fileId);
-    
-    // Construct the download URL
-    // Format: https://api.telegram.org/file/bot<token>/<file_path>
-    const fileUrl = `https://api.telegram.org/file/bot${env.BOT_TOKEN}/${file.file_path}`;
-    
-    return fileUrl;
+    // Check if this is an image — use public CDN URL for images
+    const isImage = objectKey.match(/\.(jpg|jpeg|png|gif|webp)$/i);
+
+    if (isImage && env.R2_PUBLIC_URL) {
+      // Public CDN URL — no expiry, fast delivery via Cloudflare CDN
+      const publicUrl = `${env.R2_PUBLIC_URL.replace(/\/$/, '')}/${objectKey}`;
+      return publicUrl;
+    }
+
+    // For non-image files, generate a presigned URL (time-limited, authenticated)
+    const command = new GetObjectCommand({
+      Bucket: env.R2_BUCKET_NAME,
+      Key:    objectKey,
+    });
+
+    const presignedUrl = await getSignedUrl(r2Client, command, { expiresIn });
+    return presignedUrl;
   } catch (err) {
+    logger.error(`[R2] getFileUrl error for key "${objectKey}": ${err.message}`);
     throw new AppError('Faylni topib bo\'lmadi', 404);
   }
 }
 
 /**
- * Send an existing file directly to a user's Telegram
- * Useful for admin forwarding receipts or sensitive documents
- * 
- * @param {string} telegramId - User's Telegram ID
- * @param {string} fileId - Telegram file_id
- * @param {string} caption - Optional text attached to the file
+ * Delete a file from R2 by its object key.
+ * Used when a user deletes a portfolio item, task attachment, etc.
+ *
+ * @param {string} objectKey - R2 object key
  */
-async function sendFileToUser(telegramId, fileId, caption = '') {
+async function deleteFile(objectKey) {
+  if (!objectKey) return;
+
   try {
-    const bot = getBot();
-    await bot.sendDocument(telegramId, fileId, { caption });
-    return true;
+    await r2Client.send(new DeleteObjectCommand({
+      Bucket: env.R2_BUCKET_NAME,
+      Key:    objectKey,
+    }));
+    logger.info(`[R2] Deleted: ${objectKey}`);
   } catch (err) {
-    throw new AppError(`Faylni jo'natib bo'lmadi: ${err.message}`, 500);
+    // Non-fatal — log but don't throw. Orphaned objects can be cleaned up later.
+    logger.warn(`[R2] Delete error for key "${objectKey}": ${err.message}`);
   }
 }
 
+/**
+ * Get multiple file URLs in a single call.
+ * More efficient than calling getFileUrl() in a loop for lists.
+ *
+ * @param {string[]} objectKeys - Array of R2 object keys
+ * @returns {Promise<{ key: string, url: string }[]>}
+ */
+async function getBatchFileUrls(objectKeys) {
+  if (!objectKeys || objectKeys.length === 0) return [];
+
+  const results = await Promise.allSettled(
+    objectKeys.map(async (key) => ({
+      key,
+      url: await getFileUrl(key),
+    }))
+  );
+
+  return results
+    .filter(r => r.status === 'fulfilled')
+    .map(r => r.value);
+}
+
 module.exports = {
-  uploadFileToTelegram,
+  uploadFile,
   getFileUrl,
-  sendFileToUser
+  deleteFile,
+  getBatchFileUrls,
 };

@@ -10,9 +10,13 @@ require('dotenv').config();
 const REQUIRED = [
   'DATABASE_URL',
   'BOT_TOKEN',
-  'BOT_STORAGE_CHANNEL_ID',
   'JWT_SECRET',
   'ADMIN_TELEGRAM_IDS',
+  // R2 storage — required for file uploads
+  'R2_ENDPOINT',
+  'R2_ACCESS_KEY_ID',
+  'R2_SECRET_ACCESS_KEY',
+  'R2_BUCKET_NAME',
 ];
 
 const missing = REQUIRED.filter((key) => !process.env[key]);
@@ -30,10 +34,6 @@ if (process.env.JWT_SECRET.length < 32) {
   process.exit(1);
 }
 
-if (process.env.BOT_STORAGE_CHANNEL_ID === '-100xxxxxxxxxx') {
-  console.error('\n[FATAL] BOT_STORAGE_CHANNEL_ID o\'rnatilmagan (hali placeholder qiymat).\n');
-  process.exit(1);
-}
 
 // ─── Parse + export ───────────────────────────────────────────────────────────
 const env = {
@@ -43,8 +43,18 @@ const env = {
   DATABASE_URL: process.env.DATABASE_URL,
 
   BOT_TOKEN: process.env.BOT_TOKEN,
-  BOT_STORAGE_CHANNEL_ID: process.env.BOT_STORAGE_CHANNEL_ID,
+  // BOT_STORAGE_CHANNEL_ID no longer required (replaced by R2)
+  BOT_STORAGE_CHANNEL_ID: process.env.BOT_STORAGE_CHANNEL_ID || null,
   TELEGRAM_WEBHOOK_SECRET: process.env.TELEGRAM_WEBHOOK_SECRET || null,
+
+  // ─── Cloudflare R2 Object Storage ───────────────────────────────────────────
+  // Endpoint: jurisdiction-specific S3-compatible URL
+  R2_ENDPOINT:          process.env.R2_ENDPOINT,
+  R2_ACCESS_KEY_ID:     process.env.R2_ACCESS_KEY_ID,
+  R2_SECRET_ACCESS_KEY: process.env.R2_SECRET_ACCESS_KEY,
+  R2_BUCKET_NAME:       process.env.R2_BUCKET_NAME,
+  // Public CDN URL for serving public files (images) without presigning
+  R2_PUBLIC_URL:        process.env.R2_PUBLIC_URL || null,
 
   JWT_SECRET: process.env.JWT_SECRET,
   JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || '7d',

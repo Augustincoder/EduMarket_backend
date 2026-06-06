@@ -1,17 +1,20 @@
+// src/modules/file/file.controller.js
 const fileService = require('./file.service');
 const { AppError } = require('../../middleware/errorHandler');
 const { fromBuffer } = require('file-type');
 const path = require('path');
 
-// Allowed MIME types for MVP
+// Allowed MIME types for upload validation
 const ALLOWED_TYPES = [
   'image/jpeg',
   'image/png',
+  'image/gif',
+  'image/webp',
   'application/pdf',
   'application/msword',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // docx
   'application/vnd.ms-excel',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // xlsx
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',       // xlsx
   'application/vnd.ms-powerpoint',
   'application/vnd.openxmlformats-officedocument.presentationml.presentation', // pptx
   'application/zip',
@@ -26,11 +29,13 @@ const ALLOWED_TYPES = [
   'audio/mp4',
   'audio/aac',
   'audio/x-m4a',
-  'video/mp4' // Some browsers use video/mp4 for audio-only recordings
+  'video/mp4',
 ];
 
 /**
- * Upload files
+ * POST /api/v1/files/upload
+ * Upload one or more files to Cloudflare R2.
+ * Returns R2 object keys as fileIds (e.g. "uploads/2026/06/uuid.pdf").
  */
 async function uploadFiles(req, res) {
   if (!req.files || req.files.length === 0) {
@@ -40,18 +45,18 @@ async function uploadFiles(req, res) {
   const uploadedFileIds = [];
 
   for (const file of req.files) {
-    // 1. Extension validation (Block .exe, .sh, .bat etc.)
+    // 1. Extension blocklist
     const ext = path.extname(file.originalname).toLowerCase();
     const FORBIDDEN_EXTS = ['.exe', '.sh', '.bat', '.js', '.php', '.py', '.cmd', '.vbs'];
     if (FORBIDDEN_EXTS.includes(ext)) {
       throw new AppError(`Ushbu kengaytmali faylni yuklash taqiqlangan: ${ext}`, 400);
     }
 
-    // 2. Magic bytes validation to prevent MIME spoofing
+    // 2. Magic bytes validation (prevent MIME type spoofing)
     const typeInfo = await fromBuffer(file.buffer);
     let mimeType = typeInfo ? typeInfo.mime : null;
 
-    // Handle plain text files which do not have magic bytes signatures
+    // Handle plain text files without magic bytes
     if (!typeInfo) {
       const SAFE_TEXT_EXTS = ['.txt', '.sql', '.json', '.csv', '.md'];
       if (SAFE_TEXT_EXTS.includes(ext)) {
@@ -61,48 +66,95 @@ async function uploadFiles(req, res) {
       }
     }
 
-    // If we can't determine the type, or it's not in our allowed list, reject
     if (!mimeType || !ALLOWED_TYPES.includes(mimeType)) {
       throw new AppError(`Fayl turi ruxsat etilmagan: ${file.originalname}`, 400);
     }
 
-    const fileId = await fileService.uploadFileToTelegram(
+    // 3. Upload to Cloudflare R2
+    const objectKey = await fileService.uploadFile(
       file.buffer,
       file.originalname,
       mimeType
     );
-    
-    uploadedFileIds.push(fileId);
+
+    uploadedFileIds.push(objectKey);
   }
 
   res.status(201).json({
     success: true,
     message: 'Fayllar muvaffaqiyatli yuklandi',
-    data: {
-      fileIds: uploadedFileIds
-    }
+    data: { fileIds: uploadedFileIds },
   });
 }
 
 /**
- * Get file download URL
+ * GET /api/v1/files/:fileId/url
+ * Get a download URL for a file by its R2 object key.
+ *
+ * The fileId (R2 key) may contain slashes — client must URL-encode it:
+ *   encodeURIComponent('uploads/2026/06/uuid.pdf')
+ *   → 'uploads%2F2026%2F06%2Fuuid.pdf'
  */
 async function getFileUrl(req, res) {
-  const { fileId } = req.params;
-  
+  const fileId = decodeURIComponent(req.params.fileId || '');
+
   if (!fileId) {
     throw new AppError('fileId ko\'rsatilmagan', 400);
   }
 
   const url = await fileService.getFileUrl(fileId);
-  
+
   res.json({
     success: true,
-    data: { url }
+    data: { url },
+  });
+}
+
+/**
+ * POST /api/v1/files/batch-urls
+ * Get download URLs for multiple files in one request.
+ * Body: { fileIds: string[] }  (max 50)
+ */
+async function getBatchUrls(req, res) {
+  const { fileIds } = req.body;
+
+  if (!Array.isArray(fileIds) || fileIds.length === 0) {
+    throw new AppError('fileIds massivi bo\'sh', 400);
+  }
+  if (fileIds.length > 50) {
+    throw new AppError('Bir so\'rovda ko\'pi bilan 50 ta fayl so\'rash mumkin', 400);
+  }
+
+  const results = await fileService.getBatchFileUrls(fileIds);
+
+  res.json({
+    success: true,
+    data: { files: results },
+  });
+}
+
+/**
+ * DELETE /api/v1/files/:fileId
+ * Delete a file from R2.
+ */
+async function deleteFile(req, res) {
+  const fileId = decodeURIComponent(req.params.fileId || '');
+
+  if (!fileId) {
+    throw new AppError('fileId ko\'rsatilmagan', 400);
+  }
+
+  await fileService.deleteFile(fileId);
+
+  res.json({
+    success: true,
+    message: 'Fayl o\'chirildi',
   });
 }
 
 module.exports = {
   uploadFiles,
-  getFileUrl
+  getFileUrl,
+  getBatchUrls,
+  deleteFile,
 };
