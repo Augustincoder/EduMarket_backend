@@ -11,7 +11,7 @@ const { uploadRateLimiter } = require('../../middleware/rateLimiter');
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 20 * 1024 * 1024, // 20 MB
+    fileSize: 4 * 1024 * 1024, // 4 MB (Vercel Free Tier limit is 4.5MB payload)
     files: 5,
   },
 });

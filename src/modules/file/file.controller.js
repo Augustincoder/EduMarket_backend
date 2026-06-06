@@ -23,12 +23,16 @@ const ALLOWED_TYPES = [
   'application/json',
   'text/csv',
   'audio/webm',
+  'video/webm', // Chrome MediaRecorder often saves audio as video/webm
   'audio/ogg',
   'audio/mp3',
   'audio/mpeg',
   'audio/mp4',
   'audio/aac',
   'audio/x-m4a',
+  'audio/wav',
+  'audio/x-wav',
+  'audio/flac',
   'video/mp4',
 ];
 
@@ -58,10 +62,13 @@ async function uploadFiles(req, res) {
 
     // Handle plain text files without magic bytes
     if (!typeInfo) {
-      const SAFE_TEXT_EXTS = ['.txt', '.sql', '.json', '.csv', '.md'];
+      const SAFE_TEXT_EXTS = ['.txt', '.sql', '.json', '.csv', '.md', '.webm', '.m4a', '.mp3'];
       if (SAFE_TEXT_EXTS.includes(ext)) {
         if (ext === '.json') mimeType = 'application/json';
         else if (ext === '.csv') mimeType = 'text/csv';
+        else if (ext === '.webm') mimeType = 'video/webm';
+        else if (ext === '.m4a') mimeType = 'audio/x-m4a';
+        else if (ext === '.mp3') mimeType = 'audio/mpeg';
         else mimeType = 'text/plain';
       }
     }
