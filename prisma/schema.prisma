@@ -175,6 +175,7 @@ model User {
   reportsSubmitted Report[] @relation("ReporterRelation")
   reportsReceived  Report[] @relation("ReportedRelation")
   verificationRequests VerificationRequest[]
+  notifications    Notification[] @relation("UserNotifications")
 
   @@index([isBanned])
   @@index([isVip])
@@ -545,4 +546,23 @@ model VerificationRequest {
   @@index([userId])
   @@index([status])
   @@map("verification_requests")
+}
+
+// ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  type      String   // "SYSTEM" | "TASK" | "MESSAGE" | "TRANSACTION" | "DISPUTE" | "BID"
+  title     String
+  message   String   @db.Text
+  actionUrl String?  @map("action_url")
+  isRead    Boolean  @default(false) @map("is_read")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation("UserNotifications", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([isRead])
+  @@map("notifications")
 }

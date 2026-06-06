@@ -38,6 +38,7 @@ const gigRouter = require('./modules/gig/gig.router');
 const onboardingRouter = require('./modules/auth/onboarding.router');
 const reportRouter = require('./modules/report/report.router');
 const verificationRouter = require('./modules/verification/verification.router');
+const notificationRouter = require('./modules/notification/notification.router');
 
 // ─── CORS config ──────────────────────────────────────────────────────────────
 // Telegram Mini Apps run in an iframe — browsers treat them as cross-origin.
@@ -106,8 +107,8 @@ function createApp() {
   }
 
   // ── Body parsing ──────────────────────────────────────────────────────────
-  app.use(express.json({ limit: '20mb' }));
-  app.use(express.urlencoded({ extended: true, limit: '20mb' }));
+  app.use(express.json({ limit: '2mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '2mb' }));
 
   // ── Cookie parsing ────────────────────────────────────────────────────────
   app.use(cookieParser());
@@ -159,6 +160,7 @@ function createApp() {
   app.use('/api/v1/onboarding', onboardingRouter);
   app.use('/api/v1/reports', reportRouter);
   app.use('/api/v1/verification', verificationRouter);
+  app.use('/api/v1/notifications', notificationRouter);
 
   // Telegram webhook (not under /api/v1 — Telegram calls this directly)
   if (webhookRouter) app.use('/webhook', webhookRouter);

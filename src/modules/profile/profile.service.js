@@ -1,5 +1,8 @@
 const prisma = require('../../config/prisma');
 const { AppError } = require('../../middleware/errorHandler');
+const crypto = require('crypto');
+const util = require('util');
+const randomBytesAsync = util.promisify(crypto.randomBytes);
 
 /**
  * Get user profile data
@@ -54,7 +57,8 @@ async function getProfile(userId) {
 
   // Fallback for older users missing a referral code
   if (!user.referralCode) {
-    const code = require('crypto').randomBytes(4).toString('hex');
+    const codeBuffer = await randomBytesAsync(4);
+    const code = codeBuffer.toString('hex');
     const updated = await prisma.user.update({
       where: { id: userId },
       data: { referralCode: code },
@@ -82,7 +86,8 @@ async function getReferrals(userId) {
 
   // If code is missing, generate it
   if (!user.referralCode) {
-    user.referralCode = require('crypto').randomBytes(4).toString('hex');
+    const codeBuffer = await randomBytesAsync(4);
+    user.referralCode = codeBuffer.toString('hex');
     await prisma.user.update({
       where: { id: userId },
       data: { referralCode: user.referralCode }
@@ -186,5 +191,6 @@ module.exports = {
   getProfile,
   updateProfile,
   getLeaderboard,
-  updatePushToken
+  updatePushToken,
+  getReferrals
 };

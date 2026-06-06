@@ -255,6 +255,57 @@ async function notifyBroadcast(telegramId, text) {
   await sendTelegramMessage(telegramId.toString(), text);
 }
 
+// ─── CRUD DB Methods for Inbox ──────────────────────────────────────────────────
+
+async function getNotifications(userId, limit = 20, cursor = null) {
+  const where = { userId };
+  const query = {
+    where,
+    take: limit + 1,
+    orderBy: { createdAt: 'desc' }
+  };
+  
+  if (cursor) {
+    query.cursor = { id: cursor };
+    query.skip = 1;
+  }
+  
+  const notifications = await prisma.notification.findMany(query);
+  const unreadCount = await prisma.notification.count({ where: { userId, isRead: false } });
+  
+  let nextCursor = null;
+  if (notifications.length > limit) {
+    const nextItem = notifications.pop();
+    nextCursor = nextItem.id;
+  }
+  
+  return { notifications, unreadCount, nextCursor };
+}
+
+async function markAsRead(notificationId, userId) {
+  const notif = await prisma.notification.findUnique({ where: { id: notificationId } });
+  if (!notif) throw new Error("Notification not found");
+  if (notif.userId !== userId) throw new Error("Unauthorized");
+  
+  return prisma.notification.update({
+    where: { id: notificationId },
+    data: { isRead: true }
+  });
+}
+
+async function markAllAsRead(userId) {
+  return prisma.notification.updateMany({
+    where: { userId, isRead: false },
+    data: { isRead: true }
+  });
+}
+
+async function createDbNotification(userId, type, title, message, actionUrl = null) {
+  return prisma.notification.create({
+    data: { userId, type, title, message, actionUrl }
+  });
+}
+
 module.exports = {
   notifyNewBid,
   notifyTaskAssigned,
@@ -270,5 +321,9 @@ module.exports = {
   referralBonusNotify,
   notifyAdminsVerifyStudent,
   notifyWarning,
-  notifyBroadcast
+  notifyBroadcast,
+  getNotifications,
+  markAsRead,
+  markAllAsRead,
+  createDbNotification
 };

@@ -36,7 +36,7 @@ async function handleUserConnect(userId, socketId) {
 
   if (isFirstOverall && io) {
     logger.debug(`User ${userId} is now online`);
-    io.emit('user_status_changed', { userId, isOnline: true });
+    io.to(`presence_${userId}`).emit('user_status_changed', { userId, isOnline: true });
   }
 }
 
@@ -70,7 +70,7 @@ async function handleUserDisconnect(userId, socketId) {
 
   if (isLastOverall && io) {
     logger.debug(`User ${userId} is now offline`);
-    io.emit('user_status_changed', { userId, isOnline: false });
+    io.to(`presence_${userId}`).emit('user_status_changed', { userId, isOnline: false });
   }
 }
 
@@ -202,6 +202,20 @@ function initSocket(httpServer) {
       const roomName = `task_${taskId}`;
       // Broadcast to everyone in the room except the sender
       socket.to(roomName).emit('user_typing', { taskId, userId: socket.user.userId });
+    });
+
+    socket.on('subscribe_presence', (userIds) => {
+      if (!Array.isArray(userIds)) return;
+      userIds.forEach(id => {
+        socket.join(`presence_${id}`);
+      });
+    });
+
+    socket.on('unsubscribe_presence', (userIds) => {
+      if (!Array.isArray(userIds)) return;
+      userIds.forEach(id => {
+        socket.leave(`presence_${id}`);
+      });
     });
 
     socket.on('disconnect', () => {

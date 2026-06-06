@@ -9,9 +9,8 @@ module.exports = {
 
       // Cluster mode: use all CPU cores in production
       // For MVP: 1 instance. Uncomment 'max' when scaling.
-      instances: 1,
-      // instances: 'max',  // Uncomment for cluster mode (requires session store)
-      exec_mode: 'fork',   // Change to 'cluster' with instances: 'max'
+      instances: 'max',
+      exec_mode: 'cluster',
 
       // Restart policy
       autorestart: true,
