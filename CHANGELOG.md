@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-06-06
+
+### Added
+- **Enterprise APIs**: Implemented APIs for Phase 1-8 of the Enterprise Plan.
+- **AI Matchmaking**: Intelligent NLP algorithms in `ai.service.js` to match tasks with freelancers.
+- **Milestone Management**: Secure multi-stage task delivery system endpoints (`milestone.controller.js`, `milestone.router.js`).
+- **State Machine**: Robust atomic state transitions for task lifecycle (`task.stateMachine.js`).
+
+### Changed
+- **Prisma Schema**: Extended database schema to support AI insights, Disputes, Milestones, and Reputation Passports.
+- **Task Service**: Refactored task creation and fetching to seamlessly integrate with the new AI engine and state machine.
+
 ## [1.1.0] - 2026-06-05
 
 ### Added
