@@ -82,10 +82,17 @@ function initBotHandlers(bot) {
       }
       const userId = data.split(':')[1];
       const prisma = require('../config/prisma');
-      prisma.user.update({
-        where: { id: userId },
-        data: { isVerifiedStudent: true, badge: 'ISHONCHLI' }
-      }).then((user) => {
+      
+      Promise.all([
+        prisma.user.update({
+          where: { id: userId },
+          data: { isVerifiedStudent: true, badge: 'ISHONCHLI', verificationStatus: 'APPROVED' }
+        }),
+        prisma.verificationRequest.updateMany({
+          where: { userId, status: 'PENDING' },
+          data: { status: 'APPROVED', resolvedAt: new Date() }
+        })
+      ]).then(([user]) => {
         bot.sendMessage(chatId, `✅ Foydalanuvchi <b>${user.fullname}</b> (ID: ${userId}) talabalik guvohnomasi muvaffaqiyatli tasdiqlandi.`, { parse_mode: 'HTML' });
         bot.sendMessage(user.telegramId.toString(), `🎉 <b>Tabriklaymiz!</b>\n\nSizning talabalik guvohnomangiz muvaffaqiyatli tasdiqlandi. Profilingizga "Ishonchli" 🔵 badge-i qo'shildi!`, { parse_mode: 'HTML' }).catch(() => {});
         bot.answerCallbackQuery(query.id, { text: "Tasdiqlandi" });
@@ -100,12 +107,19 @@ function initBotHandlers(bot) {
       }
       const userId = data.split(':')[1];
       const prisma = require('../config/prisma');
-      prisma.user.update({
-        where: { id: userId },
-        data: { isVerifiedStudent: false, studentCardFileId: null }
-      }).then((user) => {
-        bot.sendMessage(chatId, `❌ Foydalanuvchi <b>${user.fullname}</b> (ID: ${userId}) talabalik guvohnomasi rad etildi.`, { parse_mode: 'HTML' });
-        bot.sendMessage(user.telegramId.toString(), `⚠️ <b>Diqqat!</b>\n\nSizning talabalik guvohnomangiz tasdiqlanmadi. Iltimos, guvohnoma rasmini qaytadan yuklang yoki qo'llab-quvvatlash bo'limiga yozing.`, { parse_mode: 'HTML' }).catch(() => {});
+
+      Promise.all([
+        prisma.user.update({
+          where: { id: userId },
+          data: { isVerifiedStudent: false, verificationStatus: 'REJECTED' }
+        }),
+        prisma.verificationRequest.updateMany({
+          where: { userId, status: 'PENDING' },
+          data: { status: 'REJECTED', resolvedAt: new Date() }
+        })
+      ]).then((user) => {
+        bot.sendMessage(chatId, `❌ Foydalanuvchi <b>${user[0].fullname}</b> (ID: ${userId}) talabalik guvohnomasi rad etildi.`, { parse_mode: 'HTML' });
+        bot.sendMessage(user[0].telegramId.toString(), `⚠️ <b>Diqqat!</b>\n\nSizning talabalik guvohnomangiz tasdiqlanmadi. Iltimos, guvohnoma rasmini qaytadan yuklang yoki qo'llab-quvvatlash bo'limiga yozing.`, { parse_mode: 'HTML' }).catch(() => {});
         bot.answerCallbackQuery(query.id, { text: "Rad etildi" });
       }).catch((err) => {
         bot.sendMessage(chatId, `❌ Rad etishda xatolik: ${err.message}`);

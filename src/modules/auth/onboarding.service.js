@@ -50,10 +50,23 @@ async function completeOnboarding(userId, data) {
 async function verifyStudent(userId, fileId) {
   if (!fileId) throw new AppError('Guvohnoma fayli kiritilmagan', 400);
   
+  // 1. Update user
   const user = await prisma.user.update({
     where: { id: userId },
     data: {
       studentCardFileId: fileId,
+      verificationStatus: 'PENDING'
+    }
+  });
+
+  // 2. Create VerificationRequest record
+  await prisma.verificationRequest.create({
+    data: {
+      userId,
+      documentType: 'STUDENT_ID',
+      documentFileId: fileId,
+      selfieFileId: fileId, // In onboarding we might only have one file
+      status: 'PENDING'
     }
   });
 

@@ -297,11 +297,25 @@ async function warnUser(adminId, targetUserId, message) {
  * Verify student verification request
  */
 async function verifyStudentStatus(adminId, targetUserId, isApproved, rejectReason = null) {
+  const status = isApproved ? 'APPROVED' : 'REJECTED';
+  
   const user = await prisma.user.update({
     where: { id: targetUserId },
     data: {
       isVerifiedStudent: isApproved,
+      verificationStatus: status,
       badge: isApproved ? 'ISHONCHLI' : 'YANGI'
+    }
+  });
+
+  // Sync with VerificationRequest records
+  await prisma.verificationRequest.updateMany({
+    where: { userId: targetUserId, status: 'PENDING' },
+    data: { 
+      status, 
+      adminNote: rejectReason, 
+      resolvedAt: new Date(),
+      resolvedBy: adminId
     }
   });
 
