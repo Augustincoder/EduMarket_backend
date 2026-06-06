@@ -131,6 +131,7 @@ module.exports = {
   requestRevision,
   cancelTask,
   openDispute,
+  promoteTask,
   deleteTask,
   flagTask
 };

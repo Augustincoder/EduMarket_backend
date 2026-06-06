@@ -271,7 +271,7 @@ async function getNotifications(userId, limit = 20, cursor = null) {
   }
   
   const notifications = await prisma.notification.findMany(query);
-  const unreadCount = await prisma.notification.count({ where: { userId, isRead: false } });
+  const unreadCount = await prisma.notification.count({ where: { userId, status: 'UNREAD' } });
   
   let nextCursor = null;
   if (notifications.length > limit) {
@@ -279,7 +279,12 @@ async function getNotifications(userId, limit = 20, cursor = null) {
     nextCursor = nextItem.id;
   }
   
-  return { notifications, unreadCount, nextCursor };
+  const mappedNotifications = notifications.map(notif => ({
+    ...notif,
+    isRead: notif.status === 'READ'
+  }));
+  
+  return { notifications: mappedNotifications, unreadCount, nextCursor };
 }
 
 async function markAsRead(notificationId, userId) {
@@ -289,14 +294,14 @@ async function markAsRead(notificationId, userId) {
   
   return prisma.notification.update({
     where: { id: notificationId },
-    data: { isRead: true }
+    data: { status: 'READ' }
   });
 }
 
 async function markAllAsRead(userId) {
   return prisma.notification.updateMany({
-    where: { userId, isRead: false },
-    data: { isRead: true }
+    where: { userId, status: 'UNREAD' },
+    data: { status: 'READ' }
   });
 }
 
