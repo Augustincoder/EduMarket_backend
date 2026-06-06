@@ -59,14 +59,13 @@ async function createBid(taskId, freelancerId, data) {
 }
 
 /**
- * Get all bids for a task (Client only)
+ * Get all bids for a task (Blind Bidding implemented)
  * VIP freelancers are sorted first, then by rating
  */
-async function getTaskBids(taskId, clientId) {
+async function getTaskBids(taskId, userId) {
   const task = await prisma.task.findUnique({ where: { id: taskId } });
   
   if (!task) throw new AppError('Vazifa topilmadi', 404);
-  if (task.clientId !== clientId) throw new AppError('Takliflarni faqat vazifa egasi ko\'rishi mumkin', 403);
 
   const bids = await prisma.bid.findMany({
     where: { taskId },
@@ -97,7 +96,24 @@ async function getTaskBids(taskId, clientId) {
     return ratingB - ratingA;
   });
 
-  return bids;
+  // Phase 3: Blind Bidding System (Redact competitor prices)
+  const isClient = task.clientId === userId;
+  
+  const redactedBids = bids.map(bid => {
+    const isOwner = bid.freelancerId === userId;
+    if (!isClient && !isOwner) {
+      return {
+        ...bid,
+        proposedPrice: null, // REDACTED
+        message: '[Raqobat uchun yashirilgan]', // REDACTED
+        counterPrice: null,
+        counterMessage: null
+      };
+    }
+    return bid;
+  });
+
+  return redactedBids;
 }
 
 /**

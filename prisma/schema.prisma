@@ -17,6 +17,7 @@ enum TaskStatus {
   OPEN
   ASSIGNED
   IN_PROGRESS
+  PREVIEW_PENDING
   IN_REVIEW
   COMPLETED
   CANCELED
@@ -176,6 +177,7 @@ model User {
   reportsReceived  Report[] @relation("ReportedRelation")
   verificationRequests VerificationRequest[]
   notifications    Notification[] @relation("UserNotifications")
+  taskFlags        TaskFlag[]
 
   @@index([isBanned])
   @@index([isVip])
@@ -218,6 +220,9 @@ model Task {
   // ── Soft delete ──
   deletedAt DateTime? @map("deleted_at")
 
+  // Phase 8: Peer Quality Shield
+  flagCount    Int      @default(0)
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -230,6 +235,11 @@ model Task {
   dispute    Dispute?
   savedBy    SavedTask[]
   reports    Report[]
+  delivery   WorkDelivery?
+  flags      TaskFlag[]
+
+  // Phase 14 / Phase 4: Collaborative Task Rooms
+  milestones      TaskMilestone[]
 
   @@index([status])
   @@index([clientId])
@@ -557,12 +567,94 @@ model Notification {
   title     String
   message   String   @db.Text
   actionUrl String?  @map("action_url")
-  isRead    Boolean  @default(false) @map("is_read")
+  status    String   @default("UNREAD") // UNREAD, READ
   createdAt DateTime @default(now()) @map("created_at")
 
   user User @relation("UserNotifications", fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([userId])
-  @@index([isRead])
+  @@index([userId, status])
   @@map("notifications")
+}
+
+// Phase 8: Peer Quality Shield Model
+model TaskFlag {
+  id        String   @id @default(cuid())
+  taskId    String   @map("task_id")
+  userId    String   @map("user_id")
+  reason    String   @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, userId])
+  @@index([userId])
+  @@map("task_flags")
+}
+
+// ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+model WorkDelivery {
+  id              String         @id @default(cuid())
+  taskId          String         @unique @map("task_id")
+  task            Task           @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  freelancerId    String         @map("freelancer_id")
+  
+  // Protected preview — client sees this before accepting
+  previewFileIds  String[]       @default([]) @map("preview_file_ids")
+  previewNote     String?        @db.Text @map("preview_note")
+  
+  // Full delivery — revealed ONLY after client leaves review
+  fullFileIds     String[]       @default([]) @map("full_file_ids")
+  fullRevealedAt  DateTime?      @map("full_revealed_at")
+  
+  // Delivery metadata
+  submittedAt     DateTime       @default(now()) @map("submitted_at")
+  revisionCount   Int            @default(0) @map("revision_count")
+  revisionHistory Json?          @map("revision_history") // Array of {note, requestedAt, by}
+  
+  // Status tracking
+  clientViewedAt  DateTime?      @map("client_viewed_at")
+  clientAcceptedAt DateTime?     @map("client_accepted_at")
+
+  @@index([taskId])
+  @@index([freelancerId])
+  @@map("work_deliveries")
+}
+
+// ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+model LearningPath {
+  id              String         @id @default(cuid())
+  userId          String         @unique @map("user_id")
+  
+  // Data
+  weakSkills      String[]       @default([]) @map("weak_skills")
+  strongSkills    String[]       @default([]) @map("strong_skills")
+  demandGaps      Json           @default("[]") @map("demand_gaps") // Array of categories/skills in high demand but low supply
+  suggestedCourses Json          @default("[]") @map("suggested_courses") // Array of {title, url, description}
+  
+  // Timestamps
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+
+  @@map("learning_paths")
+}
+
+// ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+model TaskMilestone {
+  id              String         @id @default(cuid())
+  taskId          String         @map("task_id")
+  task            Task           @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  
+  title           String
+  isCompleted     Boolean        @default(false) @map("is_completed")
+  order           Int            @default(0)
+  
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+
+  @@index([taskId])
+  @@map("task_milestones")
 }

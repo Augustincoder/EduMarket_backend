@@ -9,7 +9,7 @@ async function createTask(req, res) {
 }
 
 async function listTasks(req, res) {
-  const result = await taskService.listTasks(req.query);
+  const result = await taskService.listTasks(req.query, req.user?.userId);
   res.json({ success: true, data: result });
 }
 
@@ -44,11 +44,31 @@ async function promoteTask(req, res) {
   res.json({ success: true, message: 'Vazifa muvaffaqiyatli ko\'tarildi', data: task });
 }
 
-async function submitTask(req, res) {
+async function submitPreviewDelivery(req, res) {
   const taskId = req.params.id;
-  const task = await taskService.submitForReview(taskId, req.user.userId);
+  const task = await taskService.submitPreviewDelivery(taskId, req.user.userId, req.body);
   await clearCache(`/api/v1/tasks*`);
-  res.json({ success: true, message: 'Vazifa tekshirish uchun yuborildi', data: task });
+  res.json({ success: true, message: 'Himoyalangan ko\'rinish yuklandi', data: task });
+}
+
+async function approvePreview(req, res) {
+  const taskId = req.params.id;
+  const task = await taskService.approvePreview(taskId, req.user.userId);
+  await clearCache(`/api/v1/tasks*`);
+  res.json({ success: true, message: 'Ko\'rinish tasdiqlandi. Baho qoldiring.', data: task });
+}
+
+async function revealFullDelivery(req, res) {
+  const taskId = req.params.id;
+  const delivery = await taskService.revealFullDelivery(taskId, req.user.userId);
+  res.json({ success: true, message: 'To\'liq fayllar ochildi', data: delivery });
+}
+
+async function getDeliveryFiles(req, res) {
+  const taskId = req.params.id;
+  const type = req.query.type || 'preview';
+  const files = await taskService.getDeliveryFiles(taskId, req.user.userId, type);
+  res.json({ success: true, data: files });
 }
 
 async function acceptTask(req, res) {
@@ -89,16 +109,28 @@ async function deleteTask(req, res) {
   res.json({ success: true, message: 'Vazifa o\'chirildi' });
 }
 
+async function flagTask(req, res) {
+  const taskId = req.params.id;
+  const { reason } = req.body;
+  const result = await taskService.flagTask(taskId, req.user.userId, reason);
+  await clearCache('/api/v1/tasks*');
+  res.json({ success: true, message: result.message });
+}
+
 module.exports = {
   createTask,
   listTasks,
   getMyTasks,
   getTask,
   startProgress,
-  submitTask,
+  submitPreviewDelivery,
+  approvePreview,
+  revealFullDelivery,
+  getDeliveryFiles,
   acceptTask,
   requestRevision,
   cancelTask,
   openDispute,
-  deleteTask
+  deleteTask,
+  flagTask
 };

@@ -69,4 +69,29 @@ const requireAuth = asyncHandler(async (req, res, next) => {
   }
 });
 
-module.exports = { requireAuth };
+const optionalAuth = asyncHandler(async (req, res, next) => {
+  let token = null;
+
+  if (req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
+    token = req.headers.authorization.split(' ')[1];
+  } else if (req.cookies && req.cookies.token) {
+    token = req.cookies.token;
+  }
+
+  if (!token) {
+    return next();
+  }
+
+  try {
+    const decoded = verifyToken(token);
+    if (!isBlacklisted(decoded.jti)) {
+      req.user = { ...decoded, userId: String(decoded.userId) };
+    }
+  } catch (err) {
+    // Ignore error if token is invalid, just proceed as unauthenticated
+  }
+  
+  next();
+});
+
+module.exports = { requireAuth, optionalAuth };

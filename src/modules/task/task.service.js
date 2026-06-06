@@ -100,7 +100,8 @@ async function getTaskById(id) {
           status: true,
           adminNotes: true
         }
-      }
+      },
+      delivery: true
     }
   });
 
@@ -183,8 +184,9 @@ async function promoteTask(taskId, clientId, durationDays = 3) {
 
 /**
  * List tasks using cursor-based pagination (Phase 13 improvement)
+ * Phase 5: Task DNA Matching Engine
  */
-async function listTasks(filters) {
+async function listTasks(filters, userId) {
   const { cursor, limit, category, status, query, minPrice, maxPrice } = filters;
 
   // Build where clause
@@ -238,8 +240,63 @@ async function listTasks(filters) {
     nextCursor = tasks[tasks.length - 1].id;
   }
 
+  // Phase 5: Task DNA Matching Engine Computation
+  let processedTasks = tasks;
+  
+  if (userId) {
+    // 1. Fetch user context
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { skills: true }
+    });
+    const learningPath = await prisma.learningPath.findUnique({
+      where: { userId }
+    });
+    
+    if (user) {
+      const userSkills = user.skills || [];
+      const strongSkills = learningPath?.strongSkills || [];
+      
+      // 2. Compute DNA Match score for each task
+      processedTasks = tasks.map(task => {
+        let dnaScore = 100; // Base score
+        
+        // Match category against user skills (+20)
+        if (userSkills.includes(task.category)) {
+          dnaScore += 20;
+        }
+        
+        // Success history (+30 if category is in strongSkills)
+        if (strongSkills.includes(task.category)) {
+          dnaScore += 30;
+        }
+        
+        // Competition Density (-10 if >10 bids)
+        if (task._count.bids > 10) {
+          dnaScore -= 10;
+        }
+        
+        return {
+          ...task,
+          dnaScore
+        };
+      });
+      
+      // 3. Re-sort by DNA Score (Promoted tasks still stay on top)
+      processedTasks.sort((a, b) => {
+        const aIsPromoted = a.promotedUntil && new Date(a.promotedUntil) > new Date();
+        const bIsPromoted = b.promotedUntil && new Date(b.promotedUntil) > new Date();
+        
+        if (aIsPromoted && !bIsPromoted) return -1;
+        if (!aIsPromoted && bIsPromoted) return 1;
+        
+        return (b.dnaScore || 0) - (a.dnaScore || 0);
+      });
+    }
+  }
+
   return {
-    tasks,
+    tasks: processedTasks,
     nextCursor
   };
 }
@@ -264,6 +321,7 @@ async function _changeTaskState(taskId, nextState, expectedUserId, roleStr) {
   const now = new Date();
   
   switch (nextState) {
+    case TASK_STATUS.PREVIEW_PENDING: updateData.inReviewAt = now; break; // Re-use inReviewAt for preview timestamp
     case TASK_STATUS.IN_PROGRESS: updateData.inProgressAt = now; break;
     case TASK_STATUS.IN_REVIEW: updateData.inReviewAt = now; break;
     case TASK_STATUS.COMPLETED: updateData.completedAt = now; break;
@@ -290,9 +348,112 @@ async function startProgress(taskId, freelancerId) {
   return updatedTask;
 }
 
-async function submitForReview(taskId, freelancerId) {
-  const { updatedTask } = await _changeTaskState(taskId, TASK_STATUS.IN_REVIEW, freelancerId, 'FREELANCER');
-  return updatedTask;
+/**
+ * Freelancer submits protected preview delivery
+ */
+async function submitPreviewDelivery(taskId, freelancerId, { previewFileIds, fullFileIds, note }) {
+  const task = await prisma.task.findUnique({ where: { id: taskId } });
+  if (!task) throw new AppError('Vazifa topilmadi', 404);
+  if (task.freelancerId !== freelancerId) throw new AppError('Ruxsat yo\'q', 403);
+  
+  validateTransition(task.status, TASK_STATUS.PREVIEW_PENDING);
+  
+  return prisma.$transaction(async (tx) => {
+    // Upsert delivery record
+    await tx.workDelivery.upsert({
+      where: { taskId },
+      create: { 
+        taskId, 
+        freelancerId, 
+        previewFileIds: previewFileIds || [], 
+        fullFileIds: fullFileIds || [], 
+        previewNote: note 
+      },
+      update: { 
+        previewFileIds: previewFileIds || [], 
+        fullFileIds: fullFileIds || [], 
+        previewNote: note,
+        revisionCount: { increment: task.status === TASK_STATUS.IN_PROGRESS ? 0 : 1 }
+      }
+    });
+
+    const updatedTask = await tx.task.update({
+      where: { id: taskId },
+      data: { status: TASK_STATUS.PREVIEW_PENDING, inReviewAt: new Date() },
+      include: { client: true, freelancer: true, delivery: true }
+    });
+
+    return updatedTask;
+  });
+}
+
+/**
+ * Client approves the protected preview -> moves to IN_REVIEW
+ */
+async function approvePreview(taskId, clientId) {
+  return prisma.$transaction(async (tx) => {
+    const task = await tx.task.findUnique({ where: { id: taskId } });
+    if (!task) throw new AppError('Vazifa topilmadi', 404);
+    if (task.clientId !== clientId) throw new AppError('Siz mijoz emassiz', 403);
+
+    validateTransition(task.status, TASK_STATUS.IN_REVIEW);
+
+    await tx.workDelivery.updateMany({
+      where: { taskId },
+      data: { clientAcceptedAt: new Date() }
+    });
+
+    const updatedTask = await tx.task.update({
+      where: { id: taskId },
+      data: { status: TASK_STATUS.IN_REVIEW, inReviewAt: new Date() },
+      include: { client: true, freelancer: true, delivery: true }
+    });
+
+    return updatedTask;
+  });
+}
+
+/**
+ * Called after client submits their review to unlock full files
+ */
+async function revealFullDelivery(taskId, clientId) {
+  const delivery = await prisma.workDelivery.findUnique({ where: { taskId } });
+  if (!delivery) throw new AppError('Yetkazib berish topilmadi', 404);
+  if (delivery.fullRevealedAt) return delivery; // Already revealed
+  
+  // Verify review was submitted
+  const review = await prisma.review.findFirst({
+    where: { taskId, fromUserId: clientId }
+  });
+  if (!review) throw new AppError('Avval baho qoldiring', 400, 'REVIEW_REQUIRED');
+  
+  return prisma.workDelivery.update({
+    where: { taskId },
+    data: { fullRevealedAt: new Date() }
+  });
+}
+
+/**
+ * Get protected delivery files securely
+ */
+async function getDeliveryFiles(taskId, userId, type = 'preview') {
+  const task = await prisma.task.findUnique({ where: { id: taskId } });
+  if (!task) throw new AppError('Vazifa topilmadi', 404);
+  
+  const isClient = task.clientId === userId;
+  const isFreelancer = task.freelancerId === userId;
+  if (!isClient && !isFreelancer) throw new AppError('Ruxsat yo\'q', 403);
+  
+  const delivery = await prisma.workDelivery.findUnique({ where: { taskId } });
+  if (!delivery) throw new AppError('Hali yetkazib berilmagan', 404);
+  
+  if (type === 'full') {
+    if (isClient && !delivery.fullRevealedAt) {
+      throw new AppError('Avval baho qoldiring', 403, 'REVIEW_REQUIRED_FOR_FULL_ACCESS');
+    }
+  }
+  
+  return type === 'full' ? delivery.fullFileIds : delivery.previewFileIds;
 }
 
 async function acceptDelivery(taskId, clientId) {
@@ -340,6 +501,20 @@ async function acceptDelivery(taskId, clientId) {
   }
 
   await notificationService.taskCompleted(updatedTask);
+  
+  // Phase 7: Live Task Pulse Feed
+  try {
+    const io = getIO();
+    io.emit('platform_pulse', {
+      event: 'TASK_COMPLETED',
+      category: updatedTask.category,
+      price: updatedTask.agreedPrice,
+      timestamp: Date.now()
+    });
+  } catch (err) {
+    // ignore socket errors
+  }
+  
   return updatedTask;
 }
 
@@ -402,16 +577,80 @@ async function deleteTask(taskId, clientId) {
   });
 }
 
+// Phase 8: Peer Quality Shield
+async function flagTask(taskId, userId, reason) {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) throw new AppError('Foydalanuvchi topilmadi', 404);
+
+  // Check eligibility: Must be VIP or have rating > 4.5 (assuming a certain count)
+  const isHighRated = user.ratingCount >= 5 && (user.ratingSum / user.ratingCount) >= 4.5;
+  if (!user.isVip && !isHighRated) {
+    throw new AppError('Sizda ushbu vazifani shikoyat qilish uchun yetarli reyting yoki VIP status yo\'q', 403);
+  }
+
+  // Check today's flag count for this user
+  const startOfDay = new Date();
+  startOfDay.setHours(0, 0, 0, 0);
+  const todayFlagsCount = await prisma.taskFlag.count({
+    where: {
+      userId,
+      createdAt: { gte: startOfDay }
+    }
+  });
+
+  if (todayFlagsCount >= 5) {
+    throw new AppError('Kunlik shikoyat qilish limiti tugadi (5/5)', 429);
+  }
+
+  const task = await prisma.task.findUnique({ where: { id: taskId } });
+  if (!task) throw new AppError('Vazifa topilmadi', 404);
+
+  // Create flag
+  try {
+    await prisma.taskFlag.create({
+      data: { taskId, userId, reason }
+    });
+  } catch (err) {
+    if (err.code === 'P2002') {
+      throw new AppError('Siz bu vazifaga allaqachon shikoyat qilgansiz', 400);
+    }
+    throw err;
+  }
+
+  // Update task flag count and check threshold
+  const updatedTask = await prisma.task.update({
+    where: { id: taskId },
+    data: { flagCount: { increment: 1 } }
+  });
+
+  if (updatedTask.flagCount >= 3 && updatedTask.status === TASK_STATUS.OPEN) {
+    // Hide or cancel task automatically
+    await prisma.task.update({
+      where: { id: taskId },
+      data: { status: TASK_STATUS.CANCELED, canceledAt: new Date() }
+    });
+    
+    // Notify Admin (we can create a notification or log)
+    logger.warn(`Task ${taskId} automatically canceled due to 3+ flags.`);
+  }
+
+  return { success: true, message: 'Shikoyat qabul qilindi' };
+}
+
 module.exports = {
   createTask,
   getTaskById,
   getMyTasks,
   listTasks,
   startProgress,
-  submitForReview,
+  submitPreviewDelivery,
+  approvePreview,
+  revealFullDelivery,
+  getDeliveryFiles,
   acceptDelivery,
   requestRevision,
   cancelTask,
   openDispute,
-  deleteTask
+  deleteTask,
+  flagTask
 };

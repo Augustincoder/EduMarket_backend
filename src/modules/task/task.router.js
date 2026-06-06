@@ -1,15 +1,17 @@
 const router = require('express').Router();
 const taskController = require('./task.controller');
 const { validate } = require('../../middleware/validate');
-const { requireAuth } = require('../../middleware/auth');
+const { requireAuth, optionalAuth } = require('../../middleware/auth');
 const { asyncHandler } = require('../../middleware/errorHandler');
 const { nlpFilter } = require('../../middleware/nlpFilter');
 const { cache } = require('../../middleware/cache');
 const { createTaskSchema, listTasksSchema } = require('./task.schema');
+const milestoneRouter = require('./milestone.router');
 
 // GET /api/v1/tasks - Publicly accessible
 router.get(
   '/',
+  optionalAuth,
   cache(30), // 30 seconds cache for listings and search
   validate(listTasksSchema, 'query'),
   asyncHandler(taskController.listTasks)
@@ -52,11 +54,32 @@ router.post(
   asyncHandler(taskController.promoteTask)
 );
 
-// POST /api/v1/tasks/:id/submit-review - Freelancer submits for review
+// POST /api/v1/tasks/:id/deliver - Freelancer submits protected preview
 router.post(
-  '/:id/submit-review',
+  '/:id/deliver',
   requireAuth,
-  asyncHandler(taskController.submitTask)
+  asyncHandler(taskController.submitPreviewDelivery)
+);
+
+// POST /api/v1/tasks/:id/approve-preview - Client approves preview
+router.post(
+  '/:id/approve-preview',
+  requireAuth,
+  asyncHandler(taskController.approvePreview)
+);
+
+// POST /api/v1/tasks/:id/reveal-files - Reveal full files after review
+router.post(
+  '/:id/reveal-files',
+  requireAuth,
+  asyncHandler(taskController.revealFullDelivery)
+);
+
+// GET /api/v1/tasks/:id/delivery - Get delivery files (preview/full)
+router.get(
+  '/:id/delivery',
+  requireAuth,
+  asyncHandler(taskController.getDeliveryFiles)
 );
 
 // POST /api/v1/tasks/:id/accept - Client accepts completed task
@@ -93,5 +116,15 @@ router.delete(
   requireAuth,
   asyncHandler(taskController.deleteTask)
 );
+
+// POST /api/v1/tasks/:id/flag - Peer Quality Shield (Flag task)
+router.post(
+  '/:id/flag',
+  requireAuth,
+  asyncHandler(taskController.flagTask)
+);
+
+// Milestone routes (nested under task)
+router.use('/:id/milestones', milestoneRouter);
 
 module.exports = router;

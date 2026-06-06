@@ -39,6 +39,7 @@ const onboardingRouter = require('./modules/auth/onboarding.router');
 const reportRouter = require('./modules/report/report.router');
 const verificationRouter = require('./modules/verification/verification.router');
 const notificationRouter = require('./modules/notification/notification.router');
+const aiRouter = require('./modules/ai/ai.router');
 
 // ─── CORS config ──────────────────────────────────────────────────────────────
 // Telegram Mini Apps run in an iframe — browsers treat them as cross-origin.
@@ -161,6 +162,7 @@ function createApp() {
   app.use('/api/v1/reports', reportRouter);
   app.use('/api/v1/verification', verificationRouter);
   app.use('/api/v1/notifications', notificationRouter);
+  app.use('/api/v1/ai', aiRouter);
 
   // Telegram webhook (not under /api/v1 — Telegram calls this directly)
   if (webhookRouter) app.use('/webhook', webhookRouter);
