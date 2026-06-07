@@ -46,9 +46,7 @@ async function uploadFiles(req, res) {
     throw new AppError('Fayl tanlanmagan', 400);
   }
 
-  const uploadedFileIds = [];
-
-  for (const file of req.files) {
+  const uploadPromises = req.files.map(async (file) => {
     // 1. Extension blocklist
     const ext = path.extname(file.originalname).toLowerCase();
     const FORBIDDEN_EXTS = ['.exe', '.sh', '.bat', '.js', '.php', '.py', '.cmd', '.vbs'];
@@ -84,13 +82,20 @@ async function uploadFiles(req, res) {
       mimeType
     );
 
-    uploadedFileIds.push(objectKey);
-  }
+    return {
+      fileId: objectKey,
+      name: file.originalname,
+      size: file.size,
+      type: mimeType
+    };
+  });
+
+  const results = await Promise.all(uploadPromises);
 
   res.status(201).json({
     success: true,
     message: 'Fayllar muvaffaqiyatli yuklandi',
-    data: { fileIds: uploadedFileIds },
+    data: { files: results, fileIds: results.map(r => r.fileId) },
   });
 }
 

@@ -73,6 +73,7 @@ function generateObjectKey(mimeType, originalName) {
  */
 async function uploadFile(buffer, filename, mimeType) {
   const objectKey = generateObjectKey(mimeType, filename);
+  const isImage = mimeType.startsWith('image/');
 
   try {
     await r2Client.send(new PutObjectCommand({
@@ -80,6 +81,10 @@ async function uploadFile(buffer, filename, mimeType) {
       Key:         objectKey,
       Body:        buffer,
       ContentType: mimeType,
+      // Aggressive caching for images at the edge, private for documents
+      CacheControl: isImage 
+        ? 'public, max-age=31536000, immutable' 
+        : 'private, max-age=3600',
       // Store original filename as metadata for display purposes
       Metadata: {
         'original-name': encodeURIComponent(filename),

@@ -1,129 +1,147 @@
-<div align="center">
-  <br />
-  <h1>EduMarket Backend ⚙️</h1>
-  <p><strong>The Engine Powering the Enterprise Freelancer Ecosystem</strong></p>
-  <p>
-    <img src="https://img.shields.io/badge/Node.js-20-43853D.svg?style=flat-square&logo=node.js" alt="Node.js" />
-    <img src="https://img.shields.io/badge/Express-4.x-000000.svg?style=flat-square&logo=express" alt="Express" />
-    <img src="https://img.shields.io/badge/Prisma-5-2D3748.svg?style=flat-square&logo=prisma" alt="Prisma" />
-    <img src="https://img.shields.io/badge/PostgreSQL-16-336791.svg?style=flat-square&logo=postgresql" alt="PostgreSQL" />
-    <img src="https://img.shields.io/badge/Redis-7-DC382D.svg?style=flat-square&logo=redis" alt="Redis" />
-  </p>
-</div>
+# EduMarket Backend ⚙️ — The Enterprise-Grade Marketplace Engine
 
-<br />
+[![Node.js](https://img.shields.io/badge/Node.js-20-43853D.svg?style=for-the-badge&logo=node.js)](https://nodejs.org/)
+[![Express](https://img.shields.io/badge/Express-4.x-000000.svg?style=for-the-badge&logo=express)](https://expressjs.com/)
+[![Prisma](https://img.shields.io/badge/Prisma-5-2D3748.svg?style=for-the-badge&logo=prisma)](https://www.prisma.io/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-336791.svg?style=for-the-badge&logo=postgresql)](https://www.postgresql.org/)
+[![Redis](https://img.shields.io/badge/Redis-7-DC382D.svg?style=for-the-badge&logo=redis)](https://redis.io/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
 
-## 📖 Table of Contents
-- [Overview](#-overview)
-- [Enterprise Capabilities](#-enterprise-capabilities)
-- [System Architecture](#-system-architecture)
-- [Database Schema](#-database-schema)
-- [Environment Variables](#-environment-variables)
-- [Development Setup](#-development-setup)
-- [Key Workflows](#-key-workflows)
+EduMarket Backend is a high-performance, scalable, and secure API designed to power the next generation of **Telegram Mini App (TMA)** marketplaces. It orchestrates a complex P2P student freelancer ecosystem with industrial-grade reliability, real-time synchronization, and AI-driven matching logic.
 
 ---
 
-## 🌟 Overview
-The EduMarket Backend is a highly scalable, secure REST API built with Node.js and Express. It serves as the single source of truth for the Telegram-native EduMarket ecosystem, handling real-time WebSockets, transactional data mutations, payment webhooks, and AI-driven match-making algorithms.
+## 🏗️ Core Architectural Pillars
+
+### 1. Atomic Task State Machine
+Unlike simple CRUD apps, EduMarket relies on a strict **State Machine** for task lifecycles. This ensures business integrity and prevents race conditions in financial transactions.
+- **States**: `OPEN` → `ASSIGNED` → `IN_PROGRESS` → `IN_REVIEW` → `COMPLETED`.
+- **Validation**: Every transition is checked against role-based access (RBAC) and current state metadata.
+
+### 2. Enterprise Escrow & Ledger System
+Trust is enforced through code.
+- **Escrow**: Funds (internal ledger) are automatically held when a bid is accepted.
+- **Mutual Approval**: Payouts require explicit client approval or moderator intervention.
+- **Milestones**: Tasks are broken into smaller, verifiable chunks to reduce risk for both parties.
+
+### 3. AI-Powered Matchmaking (Task DNA)
+The engine doesn't just list tasks; it understands them.
+- **Vectorization**: Uses NLP algorithms to vectorize task requirements and freelancer profiles.
+- **Compatibility Scoring**: Real-time matching based on skills, past performance, and 'Task DNA'.
+- **Smart Routing**: High-priority tasks are pushed to 'Elite' freelancers via WebSocket demand spikes.
+
+### 4. Real-Time Synchronization Layer
+Built for sub-second responsiveness.
+- **Socket.io + Redis**: Distributed WebSocket management allowing the system to scale horizontally across multiple instances.
+- **Presence Tracking**: Global real-time 'Online/Offline' status management.
+- **Optimistic Updates Sync**: Ensures the sender and receiver UIs are in perfect harmony.
 
 ---
 
-## 🚀 Enterprise Capabilities
-- **AI-Powered Matchmaking**: Intelligent NLP algorithms to match tasks with the perfect freelancer based on 'Task DNA'.
-- **Atomic State Machine**: Bullet-proof state transitions for Tasks (Open -> Assigned -> In Progress -> Review -> Completed) ensuring no race conditions.
-- **Milestone Engine**: Secure, multi-stage task delivery tracking requiring mutual approval, protecting both client and freelancer.
-- **Dispute Resolution (CRM)**: Fully-fledged admin tools for Peer Quality Shield, allowing moderators to review reports, evidence, and apply financial adjustments.
-- **Real-Time Presence**: Instant push notifications (via Firebase Admin SDK) and sub-second chat delivery (via Socket.io backed by Redis Pub/Sub).
-- **Scalable Infrastructure**: Ready for horizontal scaling with separated stateless API nodes and stateful Redis clusters.
+## 🛡️ Security & Integrity Suite
+
+-   **Antifraud Engine**: Advanced heuristics to detect fake reviews, duplicate accounts via IP/Device hashing, and bid spamming.
+-   **NLP Content Shield**: Integrated filtering that detects and blocks exam-cheating requests, academic dishonesty, and external contact exchange.
+-   **Cloudflare R2 Integration**: Secure, private document storage (EduDrive). Files are never public; they are accessed via **60-minute pre-signed URLs** generated on-the-fly.
+-   **JWT Stateless Auth**: Robust authentication leveraging Telegram's native `initData` validation with HMAC-SHA256 signatures.
 
 ---
 
-## 📐 System Architecture
+## 📐 System Overview
 
 ```mermaid
 graph TD;
-    Client[EduMarket Frontend / Telegram App] -->|HTTPS REST| API[Express API Gateway]
-    Client <-->|WSS| Socket[Socket.io Server]
+    Client[EduMarket Frontend / TMA] -->|REST API| Gateway[Express API Gateway]
+    Client <-->|WebSockets| Socket[Socket.io + Redis]
     
-    API --> Auth[Auth & RBAC Middleware]
-    API --> Logic[Business Logic / Services]
+    Gateway --> Auth[JWT & TMA Validator]
+    Gateway --> NLP[NLP Filter & Antifraud]
     
-    Logic -->|ORMs| Prisma[Prisma Client]
-    Prisma <--> DB[(PostgreSQL)]
+    SubGraph Core[Core Modules]
+        Auth --> Task[Task Engine]
+        Auth --> Payment[Escrow Ledger]
+        Auth --> Chat[Real-time Chat]
+    End
     
-    Logic -.->|Cache / Limits| Redis[(Redis Cluster)]
-    Socket -.->|Presence / PubSub| Redis
+    Task --> Prisma[Prisma ORM]
+    Payment --> Prisma
+    Prisma <--> DB[(PostgreSQL 16)]
     
-    Logic -->|Webhooks| Payments[Click / Payme APIs]
-    Logic -->|S3 Protocol| R2[Cloudflare R2 Storage]
+    Task -.-> Cache[(Redis Cache)]
+    Socket -.-> Cache
+    
+    Core --> Storage[Cloudflare R2]
+    Core --> Notify[Firebase FCM]
 ```
 
 ---
 
-## 🗄 Database Schema (Highlights)
-The database is managed via Prisma ORM. Key entity relations include:
-- `User`: Handles dual-roles (Client / Freelancer) with strict RBAC.
-- `Task` & `Bid`: Core marketplace entities linked by a custom `TaskStateMachine`.
-- `Milestone`: Sub-tasks tied to `Task` for segmented deliveries.
-- `ChatRoom` & `Message`: Real-time communication tables.
-- `Report` & `Dispute`: Admin CRM entities for quality control.
-- `Reputation` & `Portfolio`: Freelancer verifiability metrics.
+## 🚀 Key Modules Deep-Dive
+
+| Module | Purpose | Key Feature |
+| :--- | :--- | :--- |
+| **`task`** | Marketplace lifecycle | State Machine validation |
+| **`bid`** | Negotiation engine | Counter-offers & Stealth Mode |
+| **`chat`** | P2P Communication | File sharing, Reply/Edit, Read Receipts |
+| **`file`** | Storage (EduDrive) | CDN caching & Pre-signed access |
+| **`vip`** | Monetization | Subscription & Promotion handling |
+| **`verification`** | Trust & Safety | AI-assisted ID verification flow |
+| **`report`** | Peer Shield | Dispute resolution & Admin CRM |
 
 ---
 
-## 🔐 Environment Variables
+## 🛠️ Installation & Engineering Setup
 
-Create a `.env` file in the root directory:
+### Prerequisites
+- **Node.js**: v20.x or higher
+- **Database**: PostgreSQL v16+
+- **Cache**: Redis v7+
+- **Cloud**: Cloudflare R2 bucket & Firebase Project
 
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `PORT` | The port the API runs on | `5000` |
-| `DATABASE_URL` | PostgreSQL connection string | `postgresql://user:pass@host:5432/db` |
-| `JWT_SECRET` | Secret for signing Auth tokens | `super-secret-key-123` |
-| `REDIS_URL` | Redis connection URL | `redis://localhost:6379` |
-| `R2_ACCESS_KEY_ID` | Cloudflare R2 Credentials | `xxx` |
-| `R2_SECRET_ACCESS_KEY` | Cloudflare R2 Credentials | `xxx` |
-| `FIREBASE_PROJECT_ID` | FCM Push Notifications | `edumarket-123` |
+### 1. Repository Setup
+```bash
+git clone https://github.com/your-username/edumarket-backend.git
+cd edumarket-backend
+npm install
+```
+
+### 2. Environment Configuration
+Create a `.env` file from the provided template:
+```env
+PORT=3000
+DATABASE_URL="postgresql://user:pass@localhost:5432/edumarket"
+REDIS_URL="redis://localhost:6379"
+JWT_SECRET="your_secure_random_string"
+R2_ACCESS_KEY_ID="xxx"
+R2_SECRET_ACCESS_KEY="xxx"
+R2_BUCKET_NAME="edudrive"
+TELEGRAM_BOT_TOKEN="xxx"
+FIREBASE_CREDENTIALS_JSON='{...}'
+```
+
+### 3. Database Genesis
+```bash
+npx prisma generate
+npx prisma db push
+npm run seed  # Loads categories and initial system settings
+```
+
+### 4. Execution
+```bash
+npm run dev   # Local development with Nodemon
+npm run start # Production-ready build
+```
 
 ---
 
-## 🛠 Development Setup
+## 🤝 Contributing & Standards
 
-1. **Install Dependencies**
-   ```bash
-   npm install
-   ```
-
-2. **Database Setup**
-   ```bash
-   # Push schema to the database
-   npx prisma db push
-   
-   # Generate Prisma Client
-   npx prisma generate
-   ```
-
-3. **Start the Development Server**
-   ```bash
-   # Run with nodemon
-   npm run dev
-   ```
-
-4. **Linting**
-   ```bash
-   npm run lint
-   ```
+We maintain a **Senior-level engineering standard**:
+- **Linting**: Strict ESLint rules for CommonJS/ESM compatibility.
+- **Git Flow**: Feature-branch workflow with descriptive commits.
+- **Documentation**: All new services must include architectural summaries.
 
 ---
 
-## ⚙️ Key Workflows
-
-### 1. Task Creation & Bidding
-When a client creates a task, the AI Matchmaking service vectorizes the requirements and notifies eligible freelancers. Bids are securely isolated, and clients can leverage **Stealth Mode** to hide their identity during negotiations.
-
-### 2. The Escrow & Milestone Flow
-Once a bid is accepted, the task enters the `IN_PROGRESS` state. Freelancers submit work via Milestones. Clients review the deliverables and approve them, which triggers internal ledger updates (and eventual payout).
-
-### 3. File Uploads (Cloudflare R2)
-All media and delivery files are streamed securely to Cloudflare R2 object storage. Pre-signed URLs are utilized for temporary read access to ensure data privacy.
+## 📄 License
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
