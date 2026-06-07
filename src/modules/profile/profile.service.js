@@ -37,6 +37,8 @@ async function getProfile(userId) {
       freelancerBio: true,
       freelancerExperience: true,
       isOnboardingComplete: true,
+      verificationStatus: true,
+      isVerifiedStudent: true,
       createdAt: true,
       _count: {
         select: {

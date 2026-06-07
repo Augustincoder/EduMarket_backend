@@ -38,8 +38,8 @@ async function startProgress(req, res) {
 
 async function promoteTask(req, res) {
   const taskId = req.params.id;
-  const { durationDays } = req.body;
-  const task = await taskService.promoteTask(taskId, req.user.userId, durationDays);
+  const { packageType } = req.body;
+  const task = await taskService.promoteTask(taskId, req.user.userId, packageType);
   await clearCache(`/api/v1/tasks*`);
   res.json({ success: true, message: 'Vazifa muvaffaqiyatli ko\'tarildi', data: task });
 }

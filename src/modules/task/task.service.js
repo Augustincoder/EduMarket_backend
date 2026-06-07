@@ -164,17 +164,21 @@ async function getMyTasks(userId, filters) {
 /**
  * Promote a task to top of listings
  */
-async function promoteTask(taskId, clientId, durationDays = 3) {
+async function promoteTask(taskId, clientId, packageType) {
   const task = await prisma.task.findUnique({ where: { id: taskId } });
   
   if (!task) throw new AppError('Vazifa topilmadi', 404);
   if (task.clientId !== clientId) throw new AppError('Ruxsat yo\'q', 403);
-  if (task.status !== TASK_STATUS.OPEN) throw new AppError('Faqat ochiq vazifalarni ko\'tarish mumkin', 400);
+  if (task.status !== TASK_STATUS.OPEN) throw new AppError('Faqat ochiq vazifalar ko\'tarish mumkin', 400);
 
-  // In real app, check user balance and deduct fee here
-  
+  // Calculate duration based on packageType
+  let hoursToAdd = 0;
+  if (packageType === 'PIN_12H') hoursToAdd = 12;
+  else if (packageType === 'PIN_24H') hoursToAdd = 24;
+  else hoursToAdd = 72; // Default 3 days
+
   const promotedUntil = new Date();
-  promotedUntil.setDate(promotedUntil.getDate() + parseInt(durationDays, 10));
+  promotedUntil.setHours(promotedUntil.getHours() + hoursToAdd);
 
   return prisma.task.update({
     where: { id: taskId },
@@ -187,7 +191,7 @@ async function promoteTask(taskId, clientId, durationDays = 3) {
  * Phase 5: Task DNA Matching Engine
  */
 async function listTasks(filters, userId) {
-  const { cursor, limit, category, status, query, minPrice, maxPrice } = filters;
+  const { cursor, limit, category, status, query, minPrice, maxPrice, sort } = filters;
 
   // Build where clause
   const where = {
@@ -196,10 +200,15 @@ async function listTasks(filters, userId) {
 
   if (category) where.category = category;
   if (status) where.status = status;
+  
+  // Price Filtering: Filter by priceMin and priceMax range
   if (minPrice || maxPrice) {
-    where.priceMin = {};
-    if (minPrice) where.priceMin.gte = minPrice;
-    if (maxPrice) where.priceMax = { lte: maxPrice };
+    if (minPrice) {
+      where.priceMax = { gte: parseInt(minPrice, 10) };
+    }
+    if (maxPrice) {
+      where.priceMin = { ...where.priceMin, lte: parseInt(maxPrice, 10) };
+    }
   }
   
   // Phase 14: Full-text search using Postgres tsvector
@@ -216,14 +225,22 @@ async function listTasks(filters, userId) {
     where.id = { lt: cursor }; // 'lt' because we order by 'desc'
   }
 
-  // Fetch limit + 1 to correctly determine if there's a next page
+  // Build OrderBy
+  const orderBy = [{ promotedUntil: { sort: 'desc', nulls: 'last' } }];
+  
+  if (sort === 'priceAsc') {
+    orderBy.push({ priceMin: 'asc' });
+  } else if (sort === 'priceDesc') {
+    orderBy.push({ priceMin: 'desc' });
+  } else {
+    orderBy.push({ createdAt: 'desc' }); // newest as default
+  }
+
+  // Fetch tasks
   const tasks = await prisma.task.findMany({
     where,
     take: limit + 1,
-    orderBy: [
-      { promotedUntil: { sort: 'desc', nulls: 'last' } }, // Promoted tasks first
-      { createdAt: 'desc' }
-    ],
+    orderBy,
     include: {
       client: {
         select: { id: true, fullname: true, isVip: true, badge: true }

@@ -1,7 +1,6 @@
 // src/modules/file/file.controller.js
 const fileService = require('./file.service');
 const { AppError } = require('../../middleware/errorHandler');
-const { fromBuffer } = require('file-type');
 const path = require('path');
 
 // Allowed MIME types for upload validation
@@ -42,6 +41,7 @@ const ALLOWED_TYPES = [
  * Returns R2 object keys as fileIds (e.g. "uploads/2026/06/uuid.pdf").
  */
 async function uploadFiles(req, res) {
+  const { fileTypeFromBuffer } = await import('file-type');
   if (!req.files || req.files.length === 0) {
     throw new AppError('Fayl tanlanmagan', 400);
   }
@@ -57,7 +57,7 @@ async function uploadFiles(req, res) {
     }
 
     // 2. Magic bytes validation (prevent MIME type spoofing)
-    const typeInfo = await fromBuffer(file.buffer);
+    const typeInfo = await fileTypeFromBuffer(file.buffer);
     let mimeType = typeInfo ? typeInfo.mime : null;
 
     // Handle plain text files without magic bytes
