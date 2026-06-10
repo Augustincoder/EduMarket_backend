@@ -9,6 +9,7 @@
 // 5. All client-facing messages in Uzbek
 
 const logger = require('../utils/logger');
+const Sentry = require('@sentry/node');
 
 // ─── AppError ─────────────────────────────────────────────────────────────────
 /**
@@ -142,6 +143,7 @@ function errorHandler(err, req, res, next) {
         method: req.method,
         userId: req.user?.userId,
       });
+      if (process.env.SENTRY_DSN) Sentry.captureException(err);
     }
 
     return res.status(err.status).json({
@@ -160,6 +162,8 @@ function errorHandler(err, req, res, next) {
     userId: req.user?.userId,
     body: req.body,
   });
+  
+  if (process.env.SENTRY_DSN) Sentry.captureException(err);
 
   return res.status(500).json({
     success: false,

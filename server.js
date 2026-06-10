@@ -11,6 +11,20 @@
 // ── STEP 1: Validate env BEFORE anything else ─────────────────────────────────
 const env = require('./src/config/env');
 
+// ── SENTRY INITIALIZATION ────────────────────────────────────────────────────
+const Sentry = require('@sentry/node');
+const { nodeProfilingIntegration } = require('@sentry/profiling-node');
+
+if (env.SENTRY_DSN) {
+  Sentry.init({
+    dsn: env.SENTRY_DSN,
+    environment: env.NODE_ENV,
+    tracesSampleRate: env.isProd ? 0.1 : 1.0,
+    profilesSampleRate: 0.1,
+    integrations: [nodeProfilingIntegration()],
+  });
+}
+
 // ── STEP 2: Logger (needs env for log level) ──────────────────────────────────
 const logger = require('./src/utils/logger');
 
@@ -33,26 +47,40 @@ const { initFirebase } = require('./src/config/firebase');
 // We log + exit so PM2 can restart the process cleanly.
 
 process.on('uncaughtException', (err) => {
+  if (env.SENTRY_DSN) Sentry.captureException(err);
+  
   logger.error({
     event: 'UNCAUGHT_EXCEPTION',
     message: err.message,
     stack: err.stack,
   });
-  // Flush logs, then exit
-  setTimeout(() => process.exit(1), 500);
+  
+  // Flush Sentry logs, then exit
+  if (env.SENTRY_DSN) {
+    Sentry.close(2000).then(() => process.exit(1));
+  } else {
+    setTimeout(() => process.exit(1), 500);
+  }
 });
 
 process.on('unhandledRejection', (reason, promise) => {
+  if (env.SENTRY_DSN) Sentry.captureException(reason);
+
   logger.error({
     event: 'UNHANDLED_REJECTION',
     reason: reason?.message || reason,
     stack: reason?.stack,
     promise: String(promise),
   });
+  
   // Do NOT exit here in production — just log.
   // Unhandled rejections in notification/scheduler are non-critical.
   if (env.isDev) {
-    process.exit(1); // Strict in development to catch bugs early
+    if (env.SENTRY_DSN) {
+      Sentry.close(2000).then(() => process.exit(1));
+    } else {
+      process.exit(1); // Strict in development to catch bugs early
+    }
   }
 });
 

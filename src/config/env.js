@@ -59,6 +59,9 @@ const env = {
   JWT_SECRET: process.env.JWT_SECRET,
   JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || '7d',
 
+  // ─── Sentry ─────────────────────────────────────────────────────────────────
+  SENTRY_DSN: process.env.SENTRY_DSN || null,
+
   ADMIN_USERNAME: process.env.ADMIN_USERNAME,
   ADMIN_PASSWORD_HASH: process.env.ADMIN_PASSWORD_HASH,
 

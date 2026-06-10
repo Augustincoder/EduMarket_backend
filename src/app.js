@@ -144,6 +144,18 @@ function createApp() {
     }
   });
 
+  // ─── Metrics endpoint (Prometheus) ────────────────────────────────────────
+  const { registry } = require('./config/metrics');
+  app.get('/metrics', async (req, res) => {
+    // Faqat internal network'dan (production da nginx bilan himoya)
+    const clientIp = req.ip || req.connection.remoteAddress;
+    if (env.isProd && !clientIp.includes('127.0.0.1') && !clientIp.includes('::1')) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+    res.set('Content-Type', registry.contentType);
+    res.end(await registry.metrics());
+  });
+
   // ─── API v1 Routes ────────────────────────────────────────────────────────
   // All API routes are versioned from day 1
   app.use('/api/v1/auth', authRouter);
@@ -171,6 +183,10 @@ function createApp() {
   app.all('*', (req, res, next) => {
     next(new AppError(`Topilmadi: ${req.originalUrl}`, 404, 'ROUTE_NOT_FOUND'));
   });
+
+  // ─── Sentry error handler (MUST be before our global error handler) ───────
+  const Sentry = require('@sentry/node');
+  Sentry.setupExpressErrorHandler(app);
 
   // ─── Global error handler (MUST be last) ──────────────────────────────────
   app.use(errorHandler);
