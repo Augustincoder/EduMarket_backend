@@ -32,9 +32,10 @@ async function login(req, res) {
  * Logout user by blacklisting their token and clearing cookie
  */
 async function logout(req, res) {
-  // Add token's jti to blacklist
-  if (req.jti) {
-    blacklistToken(req.jti);
+  const token = req.headers.authorization?.split(' ')[1] || req.cookies.token;
+  if (token && req.user && req.user.exp) {
+    const tokenExp = req.user.exp - Math.floor(Date.now() / 1000);
+    await blacklistToken(token, Math.max(tokenExp, 0));
   }
 
   // Clear cookie

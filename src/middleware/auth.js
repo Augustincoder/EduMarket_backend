@@ -1,5 +1,5 @@
 const { verifyToken } = require('../utils/jwt');
-const { isBlacklisted } = require('../utils/tokenBlacklist');
+const { isTokenBlacklisted } = require('../utils/tokenBlacklist');
 const { AppError, asyncHandler } = require('./errorHandler');
 const prisma = require('../config/prisma');
 
@@ -24,12 +24,12 @@ const requireAuth = asyncHandler(async (req, res, next) => {
     throw new AppError('Iltimos, tizimga kiring', 401, 'NO_TOKEN_PROVIDED');
   }
 
-  try {
     // Verify token structure and signature
     const decoded = verifyToken(token);
 
     // Check if token was blacklisted (logged out)
-    if (isBlacklisted(decoded.jti)) {
+    const isBlacklisted = await isTokenBlacklisted(token);
+    if (isBlacklisted) {
       throw new AppError('Sessiya yakunlangan. Qayta kiring.', 401, 'TOKEN_BLACKLISTED');
     }
 
@@ -63,10 +63,6 @@ const requireAuth = asyncHandler(async (req, res, next) => {
     req.jti = decoded.jti;
 
     next();
-  } catch (err) {
-    // Delegate to global error handler which specifically handles JsonWebTokenError
-    throw err;
-  }
 });
 
 const optionalAuth = asyncHandler(async (req, res, next) => {
@@ -84,7 +80,8 @@ const optionalAuth = asyncHandler(async (req, res, next) => {
 
   try {
     const decoded = verifyToken(token);
-    if (!isBlacklisted(decoded.jti)) {
+    const isBlacklisted = await isTokenBlacklisted(token);
+    if (!isBlacklisted) {
       req.user = { ...decoded, userId: String(decoded.userId) };
     }
   } catch (err) {

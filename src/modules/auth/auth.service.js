@@ -1,8 +1,9 @@
 const prisma = require('../../config/prisma');
 const env = require('../../config/env');
 const { validateInitData } = require('../../utils/telegramAuth');
-const { generateToken } = require('../../utils/jwt');
+const { generateToken, generateAdminToken } = require('../../utils/jwt');
 const { AppError } = require('../../middleware/errorHandler');
+const bcrypt = require('bcryptjs');
 
 /**
  * Handle Telegram Mini App login
@@ -134,19 +135,32 @@ async function loginWithTelegram(initData, ipAddress, referralCode = null) {
  * Login admin using username and password
  */
 async function loginAsAdmin(username, password) {
-  if (username !== 'admin' || password !== 'admin@123') {
+  const validUsername = env.ADMIN_USERNAME;
+  const validPasswordHash = env.ADMIN_PASSWORD_HASH;
+  
+  if (!validUsername || !validPasswordHash) {
+    throw new AppError('Admin tizimi sozlanmagan', 500, 'CONFIG_ERROR');
+  }
+  
+  if (username !== validUsername) {
+    await bcrypt.compare('dummy', validPasswordHash);
+    throw new AppError('Noto\'g\'ri login yoki parol', 401, 'INVALID_CREDENTIALS');
+  }
+  
+  const isValid = await bcrypt.compare(password, validPasswordHash);
+  if (!isValid) {
     throw new AppError('Noto\'g\'ri login yoki parol', 401, 'INVALID_CREDENTIALS');
   }
 
   let user = await prisma.user.findFirst({
-    where: { username: 'admin', role: 'ADMIN' }
+    where: { username: validUsername, role: 'ADMIN' }
   });
 
   if (!user) {
     user = await prisma.user.create({
       data: {
         telegramId: BigInt(0),
-        username: 'admin',
+        username: validUsername,
         fullname: 'System Admin',
         role: 'ADMIN',
         isOnboardingComplete: true
@@ -154,7 +168,7 @@ async function loginAsAdmin(username, password) {
     });
   }
 
-  const token = generateToken({
+  const token = generateAdminToken({
     userId: user.id,
     role: user.role
   });

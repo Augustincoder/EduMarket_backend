@@ -62,11 +62,23 @@ async function updatePushToken(req, res) {
   res.json({ success: true, message: 'Push token yangilandi' });
 }
 
+/**
+ * Delete current user profile (GDPR)
+ */
+async function deleteMyProfile(req, res) {
+  await profileService.deleteProfile(req.user.userId);
+  res.json({
+    success: true,
+    message: 'Profilingiz muvaffaqiyatli o\'chirildi'
+  });
+}
+
 module.exports = {
   getMyProfile,
   updateMyProfile,
   getUserProfile,
   getLeaderboard,
   getMyReferrals,
-  updatePushToken
+  updatePushToken,
+  deleteMyProfile
 };

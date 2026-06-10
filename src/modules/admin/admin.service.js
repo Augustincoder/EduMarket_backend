@@ -2,6 +2,15 @@ const prisma = require('../../config/prisma');
 const { AppError } = require('../../middleware/errorHandler');
 const notificationService = require('../notification/notification.service');
 const { TASK_STATUS } = require('../task/task.stateMachine');
+const createDOMPurify = require('dompurify');
+const { JSDOM } = require('jsdom');
+
+const window = new JSDOM('').window;
+const DOMPurify = createDOMPurify(window);
+
+function sanitizeMessage(message) {
+  return DOMPurify.sanitize(message, { ALLOWED_TAGS: [], ALLOWED_ATTR: [] });
+}
 
 /**
  * Log admin action to database
@@ -409,7 +418,11 @@ async function getAuditLogs() {
 /**
  * Send bulk broadcast message
  */
-async function broadcastMessage(adminId, targetType, text) {
+async function broadcastMessage(adminId, targetType, rawText) {
+  const text = sanitizeMessage(rawText);
+  if (!text.trim()) {
+    throw new AppError('Xabar bo\'sh bo\'lishi mumkin emas', 400);
+  }
   const where = { isBanned: false };
   if (targetType === 'FREELANCERS') where.isFreelancer = true;
   if (targetType === 'CLIENTS') where.isFreelancer = false;

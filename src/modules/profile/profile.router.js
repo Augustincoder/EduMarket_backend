@@ -25,6 +25,9 @@ router.post('/me/push-token', requireAuth, asyncHandler(profileController.update
 // PUT /api/v1/users/me
 router.put('/me', validate(updateProfileSchema, 'body'), asyncHandler(profileController.updateMyProfile));
 
+// DELETE /api/v1/users/me
+router.delete('/me', requireAuth, asyncHandler(profileController.deleteMyProfile));
+
 // GET /api/v1/users/:userId
 router.get('/:userId', cache(120), asyncHandler(profileController.getUserProfile));
 

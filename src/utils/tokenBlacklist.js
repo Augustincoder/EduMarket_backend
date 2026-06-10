@@ -1,36 +1,15 @@
-const NodeCache = require('node-cache');
-const env = require('../config/env');
+const { pubClient } = require('../config/redis');
 
-// Parse JWT_EXPIRES_IN (e.g., "7d") to seconds for the cache TTL
-let ttlSeconds = 7 * 24 * 60 * 60; // Default 7 days
-if (env.JWT_EXPIRES_IN.endsWith('d')) {
-  ttlSeconds = parseInt(env.JWT_EXPIRES_IN) * 24 * 60 * 60;
-} else if (env.JWT_EXPIRES_IN.endsWith('h')) {
-  ttlSeconds = parseInt(env.JWT_EXPIRES_IN) * 60 * 60;
+async function blacklistToken(token, expiresInSeconds) {
+  if (!pubClient.isOpen) return; // Redis yo'q bo'lsa o'tkazib yubor
+  const key = `bl:${token}`;
+  await pubClient.setEx(key, expiresInSeconds, '1');
 }
 
-// In-memory cache for blacklisted tokens
-// In a clustered environment, this should be replaced with Redis
-const blacklist = new NodeCache({ stdTTL: ttlSeconds, checkperiod: 3600 });
-
-/**
- * Add a JWT's unique ID (jti) to the blacklist
- * @param {string} jti - JWT ID
- */
-function blacklistToken(jti) {
-  if (jti) {
-    blacklist.set(jti, true);
-  }
+async function isTokenBlacklisted(token) {
+  if (!pubClient.isOpen) return false;
+  const result = await pubClient.get(`bl:${token}`);
+  return result === '1';
 }
 
-/**
- * Check if a JWT ID is blacklisted
- * @param {string} jti - JWT ID
- * @returns {boolean} True if blacklisted
- */
-function isBlacklisted(jti) {
-  if (!jti) return false;
-  return blacklist.has(jti);
-}
-
-module.exports = { blacklistToken, isBlacklisted };
+module.exports = { blacklistToken, isTokenBlacklisted };

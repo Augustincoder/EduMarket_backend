@@ -60,6 +60,13 @@ const authRateLimiter = createLazyLimiter({
   message: rateLimitResponse('Juda ko\'p kirish urinishi. 15 daqiqadan so\'ng urinib ko\'ring.'),
 }, 'auth');
 
+// ─── Admin Auth: 5 attempts / 15 min per IP ──────────────────────────────────
+const adminLoginRateLimiter = createLazyLimiter({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: rateLimitResponse('Juda ko\'p kirish urinishi. 15 daqiqadan so\'ng urinib ko\'ring.'),
+}, 'admin_auth');
+
 // ─── File upload: 20 uploads / hour per IP ───────────────────────────────────
 const uploadRateLimiter = createLazyLimiter({
   windowMs: 60 * 60 * 1000,
@@ -86,6 +93,7 @@ const reviewRateLimiter = createLazyLimiter({
 module.exports = {
   globalRateLimiter,
   authRateLimiter,
+  adminLoginRateLimiter,
   uploadRateLimiter,
   bidRateLimiter,
   reviewRateLimiter,

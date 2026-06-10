@@ -190,10 +190,49 @@ async function updatePushToken(userId, pushToken) {
   });
 }
 
+/**
+ * GDPR Soft Delete & Anonymize
+ */
+async function deleteProfile(userId) {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) throw new AppError('Foydalanuvchi topilmadi', 404);
+
+  return prisma.$transaction(async (tx) => {
+    // 1. Anonymize user data
+    await tx.user.update({
+      where: { id: userId },
+      data: {
+        fullname: 'Deleted User',
+        username: null,
+        avatarUrl: null,
+        bio: null,
+        skills: [],
+        portfolioIds: [],
+        freelancerBio: null,
+        studentCardFileId: null,
+        isBanned: true,
+        banReason: 'Deleted by user (GDPR)',
+        deletedAt: new Date()
+      }
+    });
+
+    // 2. Anonymize chat messages
+    await tx.chatMessage.updateMany({
+      where: { senderId: userId },
+      data: {
+        content: '[Xabar o\'chirildi]',
+        fileId: null,
+        fileName: null
+      }
+    });
+  });
+}
+
 module.exports = {
   getProfile,
   updateProfile,
   getLeaderboard,
   updatePushToken,
-  getReferrals
+  getReferrals,
+  deleteProfile
 };

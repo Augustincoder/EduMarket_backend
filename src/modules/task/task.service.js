@@ -1,4 +1,5 @@
 const prisma = require('../../config/prisma');
+const taskRepository = require('./task.repository');
 const { AppError } = require('../../middleware/errorHandler');
 const { TASK_STATUS, validateTransition } = require('./task.stateMachine');
 const { getIO, isUserOnline } = require('../../config/socket');
@@ -12,7 +13,7 @@ async function createTask(clientId, data) {
   // Phase 14: Calculate rush fee if urgent (e.g. 20% premium logic could go here)
   const rushFee = data.isUrgent ? Math.floor(data.priceMin * 0.2) : 0;
   
-  const task = await prisma.task.create({
+  const task = await taskRepository.create({
     data: {
       clientId,
       category: data.category,
@@ -63,7 +64,7 @@ async function createTask(clientId, data) {
  * Get task by ID
  */
 async function getTaskById(id) {
-  const task = await prisma.task.findUnique({
+  const task = await taskRepository.findUnique({
     where: { id },
     include: {
       client: {
@@ -148,7 +149,7 @@ async function getMyTasks(userId, filters) {
     }
   }
 
-  const tasks = await prisma.task.findMany({
+  const tasks = await taskRepository.findMany({
     where,
     orderBy: { updatedAt: 'desc' },
     include: {
@@ -165,14 +166,14 @@ async function getMyTasks(userId, filters) {
  * Promote a task to top of listings
  */
 async function promoteTask(taskId, clientId, packageType) {
-  const task = await prisma.task.findUnique({ where: { id: taskId } });
+  const task = await taskRepository.findUnique({ where: { id: taskId } });
   
   if (!task) throw new AppError('Vazifa topilmadi', 404);
   if (task.clientId !== clientId) throw new AppError('Ruxsat yo\'q', 403);
   if (task.status !== TASK_STATUS.OPEN) throw new AppError('Faqat ochiq vazifalar ko\'tarish mumkin', 400);
 
   // Calculate duration based on packageType
-  let hoursToAdd = 0;
+  let hoursToAdd;
   if (packageType === 'PIN_12H') hoursToAdd = 12;
   else if (packageType === 'PIN_24H') hoursToAdd = 24;
   else hoursToAdd = 72; // Default 3 days
@@ -180,7 +181,7 @@ async function promoteTask(taskId, clientId, packageType) {
   const promotedUntil = new Date();
   promotedUntil.setHours(promotedUntil.getHours() + hoursToAdd);
 
-  return prisma.task.update({
+  return taskRepository.update({
     where: { id: taskId },
     data: { promotedUntil }
   });
@@ -237,7 +238,7 @@ async function listTasks(filters, userId) {
   }
 
   // Fetch tasks
-  const tasks = await prisma.task.findMany({
+  const tasks = await taskRepository.findMany({
     where,
     take: limit + 1,
     orderBy,
@@ -322,7 +323,7 @@ async function listTasks(filters, userId) {
  * Internal helper to update state with validation
  */
 async function _changeTaskState(taskId, nextState, expectedUserId, roleStr) {
-  const task = await prisma.task.findUnique({ where: { id: taskId } });
+  const task = await taskRepository.findUnique({ where: { id: taskId } });
   if (!task) throw new AppError('Vazifa topilmadi', 404);
 
   // Authorize
@@ -345,7 +346,7 @@ async function _changeTaskState(taskId, nextState, expectedUserId, roleStr) {
     case TASK_STATUS.CANCELED: updateData.canceledAt = now; break;
   }
 
-  const updatedTask = await prisma.task.update({ where: { id: taskId }, data: updateData, include: { client: true, freelancer: true } });
+  const updatedTask = await taskRepository.update({ where: { id: taskId }, data: updateData, include: { client: true, freelancer: true } });
 
   try {
     const io = getIO();
@@ -369,7 +370,7 @@ async function startProgress(taskId, freelancerId) {
  * Freelancer submits protected preview delivery
  */
 async function submitPreviewDelivery(taskId, freelancerId, { previewFileIds, fullFileIds, note }) {
-  const task = await prisma.task.findUnique({ where: { id: taskId } });
+  const task = await taskRepository.findUnique({ where: { id: taskId } });
   if (!task) throw new AppError('Vazifa topilmadi', 404);
   if (task.freelancerId !== freelancerId) throw new AppError('Ruxsat yo\'q', 403);
   
@@ -454,7 +455,7 @@ async function revealFullDelivery(taskId, clientId) {
  * Get protected delivery files securely
  */
 async function getDeliveryFiles(taskId, userId, type = 'preview') {
-  const task = await prisma.task.findUnique({ where: { id: taskId } });
+  const task = await taskRepository.findUnique({ where: { id: taskId } });
   if (!task) throw new AppError('Vazifa topilmadi', 404);
   
   const isClient = task.clientId === userId;
@@ -547,7 +548,7 @@ async function cancelTask(taskId, userId) {
 }
 
 async function openDispute(taskId, userId, reason) {
-  const task = await prisma.task.findUnique({ where: { id: taskId }, include: { client: true, freelancer: true } });
+  const task = await taskRepository.findUnique({ where: { id: taskId }, include: { client: true, freelancer: true } });
   if (!task) throw new AppError('Vazifa topilmadi', 404);
   if (task.clientId !== userId && task.freelancerId !== userId) throw new AppError('Ruxsat yo\'q', 403);
 
@@ -578,7 +579,7 @@ async function openDispute(taskId, userId, reason) {
  * Soft delete task (Client only)
  */
 async function deleteTask(taskId, clientId) {
-  const task = await prisma.task.findUnique({ where: { id: taskId } });
+  const task = await taskRepository.findUnique({ where: { id: taskId } });
   
   if (!task) throw new AppError('Vazifa topilmadi', 404);
   if (task.clientId !== clientId) throw new AppError('Ruxsat yo\'q', 403);
@@ -588,7 +589,7 @@ async function deleteTask(taskId, clientId) {
     throw new AppError('Bajarilayotgan vazifani o\'chirib bo\'lmaydi', 400);
   }
 
-  return prisma.task.update({
+  return taskRepository.update({
     where: { id: taskId },
     data: { deletedAt: new Date() }
   });
@@ -619,7 +620,7 @@ async function flagTask(taskId, userId, reason) {
     throw new AppError('Kunlik shikoyat qilish limiti tugadi (5/5)', 429);
   }
 
-  const task = await prisma.task.findUnique({ where: { id: taskId } });
+  const task = await taskRepository.findUnique({ where: { id: taskId } });
   if (!task) throw new AppError('Vazifa topilmadi', 404);
 
   // Create flag
@@ -635,14 +636,14 @@ async function flagTask(taskId, userId, reason) {
   }
 
   // Update task flag count and check threshold
-  const updatedTask = await prisma.task.update({
+  const updatedTask = await taskRepository.update({
     where: { id: taskId },
     data: { flagCount: { increment: 1 } }
   });
 
   if (updatedTask.flagCount >= 3 && updatedTask.status === TASK_STATUS.OPEN) {
     // Hide or cancel task automatically
-    await prisma.task.update({
+    await taskRepository.update({
       where: { id: taskId },
       data: { status: TASK_STATUS.CANCELED, canceledAt: new Date() }
     });
@@ -668,6 +669,7 @@ module.exports = {
   requestRevision,
   cancelTask,
   openDispute,
+  promoteTask,
   deleteTask,
   flagTask
 };

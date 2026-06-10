@@ -59,6 +59,9 @@ const env = {
   JWT_SECRET: process.env.JWT_SECRET,
   JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || '7d',
 
+  ADMIN_USERNAME: process.env.ADMIN_USERNAME,
+  ADMIN_PASSWORD_HASH: process.env.ADMIN_PASSWORD_HASH,
+
   // Parse comma-separated admin IDs → number[]
   // '123456789,987654321' → [123456789, 987654321]
   ADMIN_TELEGRAM_IDS: process.env.ADMIN_TELEGRAM_IDS

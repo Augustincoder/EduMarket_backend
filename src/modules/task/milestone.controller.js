@@ -1,4 +1,5 @@
 const prisma = require('../../config/prisma');
+const taskRepository = require('./task.repository');
 const { AppError } = require('../../middleware/errorHandler');
 const { getIO } = require('../../config/socket');
 
@@ -18,7 +19,7 @@ async function createMilestone(req, res) {
   const userId = req.user.userId;
 
   // Verify task membership
-  const task = await prisma.task.findUnique({ where: { id: taskId } });
+  const task = await taskRepository.findUnique({ where: { id: taskId } });
   if (!task) throw new AppError('Vazifa topilmadi', 404);
   if (task.clientId !== userId && task.freelancerId !== userId) {
     throw new AppError('Ruxsat yo\'q', 403);
@@ -48,7 +49,7 @@ async function toggleMilestone(req, res) {
   const { isCompleted } = req.body;
   const userId = req.user.userId;
 
-  const task = await prisma.task.findUnique({ where: { id: taskId } });
+  const task = await taskRepository.findUnique({ where: { id: taskId } });
   if (!task) throw new AppError('Vazifa topilmadi', 404);
   if (task.clientId !== userId && task.freelancerId !== userId) {
     throw new AppError('Ruxsat yo\'q', 403);
@@ -70,7 +71,7 @@ async function deleteMilestone(req, res) {
   const milestoneId = req.params.milestoneId;
   const userId = req.user.userId;
 
-  const task = await prisma.task.findUnique({ where: { id: taskId } });
+  const task = await taskRepository.findUnique({ where: { id: taskId } });
   if (!task) throw new AppError('Vazifa topilmadi', 404);
   if (task.clientId !== userId && task.freelancerId !== userId) {
     throw new AppError('Ruxsat yo\'q', 403);

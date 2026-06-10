@@ -21,6 +21,23 @@ function generateToken(payload) {
 }
 
 /**
+ * Generate a JWT for an admin
+ * 
+ * @param {object} payload - Data to encode
+ * @returns {string} Signed JWT
+ */
+function generateAdminToken(payload) {
+  const tokenPayload = {
+    ...payload,
+    jti: uuidv4()
+  };
+  
+  return jwt.sign(tokenPayload, env.JWT_SECRET, {
+    expiresIn: '4h',
+  });
+}
+
+/**
  * Verify a JWT
  * 
  * @param {string} token - The JWT string
@@ -31,4 +48,4 @@ function verifyToken(token) {
   return jwt.verify(token, env.JWT_SECRET);
 }
 
-module.exports = { generateToken, verifyToken };
+module.exports = { generateToken, generateAdminToken, verifyToken };

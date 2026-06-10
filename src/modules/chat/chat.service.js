@@ -159,7 +159,9 @@ async function markAsRead(taskId, userId) {
   try {
     const io = getIO();
     io.to(`task_${taskId}`).emit('messages_read', { taskId, readerId: userId, messageIds });
-  } catch (err) {}
+  } catch (err) {
+    // ignore
+  }
 
   return { count: messageIds.length };
 }
@@ -234,7 +236,9 @@ async function editMessage(messageId, userId, newContent) {
   try {
     const io = getIO();
     io.to(`task_${message.taskId}`).emit('message_edited', updatedMessage);
-  } catch (err) {}
+  } catch (err) {
+    // ignore
+  }
 
   return updatedMessage;
 }
@@ -255,7 +259,9 @@ async function deleteMessage(messageId, userId) {
   try {
     const io = getIO();
     io.to(`task_${message.taskId}`).emit('message_deleted', { messageId, taskId: message.taskId });
-  } catch (err) {}
+  } catch (err) {
+    // ignore
+  }
 
   return deletedMessage;
 }
