@@ -3,6 +3,7 @@ const prisma = require('../../config/prisma');
 const logger = require('../../utils/logger');
 const env = require('../../config/env');
 const { admin } = require('../../config/firebase');
+const { getIO } = require('../../config/socket');
 
 /**
  * Helper to check user notification preferences
@@ -81,14 +82,16 @@ async function sendPushNotification(token, title, body, data = {}) {
 // ─── Notification Methods ──────────────────────────────────────────────────────
 
 async function notifyNewBid(taskClientId, freelancerName, bidAmount, taskId) {
+  const title = "📬 Yangi taklif!";
+  const text = `<b>${freelancerName}</b> sizning vazifangizga <b>${bidAmount} so'm</b> taklif qildi.`;
+  
+  await createDbNotification(taskClientId, 'new_bid', title, text.replace(/<[^>]*>?/gm, ''), `/tasks/${taskId}`);
+
   const { shouldSend, pushToken } = await shouldSendNotification(taskClientId, 'newBid');
   if (!shouldSend) return;
 
   const client = await prisma.user.findUnique({ where: { id: taskClientId }, select: { telegramId: true } });
   if (!client) return;
-
-  const title = "📬 Yangi taklif!";
-  const text = `<b>${freelancerName}</b> sizning vazifangizga <b>${bidAmount} so'm</b> taklif qildi.`;
   const keyboard = [[{ text: "Vazifani ko'rish", web_app: { url: `https://t.me/${env.BOT_USERNAME}/app?startapp=task_${taskId}` } }]];
 
   await sendTelegramMessage(client.telegramId.toString(), text, keyboard);
@@ -99,14 +102,16 @@ async function notifyNewBid(taskClientId, freelancerName, bidAmount, taskId) {
 }
 
 async function notifyTaskAssigned(freelancerId, taskTitle, taskId) {
+  const title = "🎉 Tabriklaymiz!";
+  const text = `Siz <b>"${taskTitle}"</b> vazifasini bajarish uchun tanlandingiz!`;
+
+  await createDbNotification(freelancerId, 'task_assigned', title, text.replace(/<[^>]*>?/gm, ''), `/tasks/${taskId}`);
+
   const { shouldSend, pushToken } = await shouldSendNotification(freelancerId, 'taskAssigned');
   if (!shouldSend) return;
 
   const freelancer = await prisma.user.findUnique({ where: { id: freelancerId }, select: { telegramId: true } });
   if (!freelancer) return;
-
-  const title = "🎉 Tabriklaymiz!";
-  const text = `Siz <b>"${taskTitle}"</b> vazifasini bajarish uchun tanlandingiz!`;
   const keyboard = [[{ text: "Vazifani ko'rish", web_app: { url: `https://t.me/${env.BOT_USERNAME}/app?startapp=task_${taskId}` } }]];
 
   await sendTelegramMessage(freelancer.telegramId.toString(), text, keyboard);
@@ -117,14 +122,16 @@ async function notifyTaskAssigned(freelancerId, taskTitle, taskId) {
 }
 
 async function notifyChatMessage(recipientId, senderName, taskId) {
+  const title = "💬 Yangi xabar";
+  const text = `<b>${senderName}</b> vazifa bo'yicha sizga xabar yubordi.`;
+
+  await createDbNotification(recipientId, 'chat_message', title, text.replace(/<[^>]*>?/gm, ''), `/tasks/${taskId}/chat`);
+
   const { shouldSend, pushToken } = await shouldSendNotification(recipientId, 'chatMessage');
   if (!shouldSend) return;
 
   const recipient = await prisma.user.findUnique({ where: { id: recipientId }, select: { telegramId: true } });
   if (!recipient) return;
-
-  const title = "💬 Yangi xabar";
-  const text = `<b>${senderName}</b> vazifa bo'yicha sizga xabar yubordi.`;
   const keyboard = [[{ text: "Chatni ochish", web_app: { url: `https://t.me/${env.BOT_USERNAME}/app?startapp=chat_${taskId}` } }]];
 
   await sendTelegramMessage(recipient.telegramId.toString(), text, keyboard);
@@ -135,14 +142,16 @@ async function notifyChatMessage(recipientId, senderName, taskId) {
 }
 
 async function notifyDeadlineApproaching(freelancerId, taskTitle, taskId) {
+  const title = "⏰ Muddat yaqinlashmoqda!";
+  const text = `<b>"${taskTitle}"</b> vazifasini topshirish muddati tugashiga 24 soatdan kam vaqt qoldi.`;
+
+  await createDbNotification(freelancerId, 'deadline', title, text.replace(/<[^>]*>?/gm, ''), `/tasks/${taskId}`);
+
   const { shouldSend, pushToken } = await shouldSendNotification(freelancerId, 'deadlineReminder');
   if (!shouldSend) return;
 
   const freelancer = await prisma.user.findUnique({ where: { id: freelancerId }, select: { telegramId: true } });
   if (!freelancer) return;
-
-  const title = "⏰ Muddat yaqinlashmoqda!";
-  const text = `<b>"${taskTitle}"</b> vazifasini topshirish muddati tugashiga 24 soatdan kam vaqt qoldi.`;
   const keyboard = [[{ text: "Vazifani ko'rish", web_app: { url: `https://t.me/${env.BOT_USERNAME}/app?startapp=task_${taskId}` } }]];
 
   await sendTelegramMessage(freelancer.telegramId.toString(), text, keyboard);
@@ -153,13 +162,16 @@ async function notifyDeadlineApproaching(freelancerId, taskTitle, taskId) {
 }
 
 async function notifyReviewReceived(recipientId, senderName, rating, taskId) {
-  if (!(await shouldSendNotification(recipientId, 'reviewReminder'))) return;
+  const stars = '⭐'.repeat(rating);
+  const title = "Yangi baho!";
+  const text = `📈 <b>Yangi baho!</b>\n\n<b>${senderName}</b> sizning ishingizni baholadi: ${stars}`;
+
+  await createDbNotification(recipientId, 'review', title, text.replace(/<[^>]*>?/gm, ''), `/tasks/${taskId}`);
+
+  if (!(await shouldSendNotification(recipientId, 'reviewReminder')).shouldSend) return;
 
   const recipient = await prisma.user.findUnique({ where: { id: recipientId }, select: { telegramId: true } });
   if (!recipient) return;
-
-  const stars = '⭐'.repeat(rating);
-  const text = `📈 <b>Yangi baho!</b>\n\n<b>${senderName}</b> sizning ishingizni baholadi: ${stars}`;
   
   await sendTelegramMessage(recipient.telegramId.toString(), text);
 }
@@ -169,10 +181,17 @@ async function autoCompleted(task) {
     `✅ <b>"${task.title}"</b> vazifasi avtomatik yakunlandi.\n` +
     `(Mijoz 48 soat ichida javob bermadi)`;
 
-  if (task.freelancer && await shouldSendNotification(task.freelancer.id, 'taskStatusChanged')) {
+  if (task.freelancer) {
+    await createDbNotification(task.freelancer.id, 'status_changed', "Vazifa avtomatik yakunlandi", msg.replace(/<[^>]*>?/gm, ''), `/tasks/${task.id}`);
+  }
+  if (task.client) {
+    await createDbNotification(task.client.id, 'status_changed', "Vazifa avtomatik yakunlandi", msg.replace(/<[^>]*>?/gm, ''), `/tasks/${task.id}`);
+  }
+
+  if (task.freelancer && (await shouldSendNotification(task.freelancer.id, 'taskStatusChanged')).shouldSend) {
     await sendTelegramMessage(task.freelancer.telegramId.toString(), msg);
   }
-  if (task.client && await shouldSendNotification(task.client.id, 'taskStatusChanged')) {
+  if (task.client && (await shouldSendNotification(task.client.id, 'taskStatusChanged')).shouldSend) {
     await sendTelegramMessage(task.client.telegramId.toString(), msg);
   }
 }
@@ -181,10 +200,17 @@ async function disputeOpened(task, dispute) {
   const msgClient = `⚠️ <b>Nizo ochildi</b>\n\n<b>"${task.title}"</b> vazifasi bo'yicha nizo ochildi. Admin tez orada ko'rib chiqadi.`;
   const msgAdmin = `🚨 <b>Yangi nizo!</b>\n\nVazifa ID: ${task.id}\nOchuvchi ID: ${dispute.openedByUserId}\nSabab: ${dispute.reason}`;
 
-  if (task.client && await shouldSendNotification(task.client.id, 'taskStatusChanged')) {
+  if (task.client) {
+    await createDbNotification(task.client.id, 'dispute', "Nizo ochildi", msgClient.replace(/<[^>]*>?/gm, ''), `/tasks/${task.id}`);
+  }
+  if (task.freelancer) {
+    await createDbNotification(task.freelancer.id, 'dispute', "Nizo ochildi", msgClient.replace(/<[^>]*>?/gm, ''), `/tasks/${task.id}`);
+  }
+
+  if (task.client && (await shouldSendNotification(task.client.id, 'taskStatusChanged')).shouldSend) {
     await sendTelegramMessage(task.client.telegramId.toString(), msgClient);
   }
-  if (task.freelancer && await shouldSendNotification(task.freelancer.id, 'taskStatusChanged')) {
+  if (task.freelancer && (await shouldSendNotification(task.freelancer.id, 'taskStatusChanged')).shouldSend) {
     await sendTelegramMessage(task.freelancer.telegramId.toString(), msgClient);
   }
   // Optional: send to admin channel or all admins
@@ -193,10 +219,17 @@ async function disputeOpened(task, dispute) {
 async function disputeResolved(task, dispute, winner) {
   const msg = `⚖️ <b>Nizo hal qilindi</b>\n\n<b>"${task.title}"</b> vazifasi bo'yicha nizo <b>${winner === 'CLIENT' ? 'MIJOZ' : 'IJROCHI'}</b> foydasiga hal qilindi.\n\nIzoh: ${dispute.adminNotes || 'Izohsiz'}`;
   
-  if (task.client && await shouldSendNotification(task.client.id, 'taskStatusChanged')) {
+  if (task.client) {
+    await createDbNotification(task.client.id, 'dispute', "Nizo hal qilindi", msg.replace(/<[^>]*>?/gm, ''), `/tasks/${task.id}`);
+  }
+  if (task.freelancer) {
+    await createDbNotification(task.freelancer.id, 'dispute', "Nizo hal qilindi", msg.replace(/<[^>]*>?/gm, ''), `/tasks/${task.id}`);
+  }
+  
+  if (task.client && (await shouldSendNotification(task.client.id, 'taskStatusChanged')).shouldSend) {
     await sendTelegramMessage(task.client.telegramId.toString(), msg);
   }
-  if (task.freelancer && await shouldSendNotification(task.freelancer.id, 'taskStatusChanged')) {
+  if (task.freelancer && (await shouldSendNotification(task.freelancer.id, 'taskStatusChanged')).shouldSend) {
     await sendTelegramMessage(task.freelancer.telegramId.toString(), msg);
   }
 }
@@ -205,17 +238,28 @@ async function taskCompleted(task) {
   const msgFreelancer = `✅ <b>Vazifa qabul qilindi</b>\n\n<b>"${task.title}"</b> vazifasi muvaffaqiyatli qabul qilindi! To'lov o'tkaziladi.`;
   const msgClient = `✅ <b>Vazifa yakunlandi</b>\n\n<b>"${task.title}"</b> vazifasi yakunlandi. Hamkorlik uchun rahmat!`;
   
-  if (task.freelancer && await shouldSendNotification(task.freelancer.id, 'taskStatusChanged')) {
+  if (task.freelancer) {
+    await createDbNotification(task.freelancer.id, 'status_changed', "Vazifa qabul qilindi", msgFreelancer.replace(/<[^>]*>?/gm, ''), `/tasks/${task.id}`);
+  }
+  if (task.client) {
+    await createDbNotification(task.client.id, 'status_changed', "Vazifa yakunlandi", msgClient.replace(/<[^>]*>?/gm, ''), `/tasks/${task.id}`);
+  }
+  
+  if (task.freelancer && (await shouldSendNotification(task.freelancer.id, 'taskStatusChanged')).shouldSend) {
     sendTelegramMessage(task.freelancer.telegramId.toString(), msgFreelancer).catch(e => logger.error(e));
   }
-  if (task.client && await shouldSendNotification(task.client.id, 'taskStatusChanged')) {
+  if (task.client && (await shouldSendNotification(task.client.id, 'taskStatusChanged')).shouldSend) {
     sendTelegramMessage(task.client.telegramId.toString(), msgClient).catch(e => logger.error(e));
   }
 }
 
 async function revisionRequested(task, note) {
   const msg = `🔄 <b>Qayta ishlash so'raldi</b>\n\n<b>"${task.title}"</b> vazifasini mijoz qayta ishlashga qaytardi.\n\nIzoh: ${note || 'Izohsiz'}`;
-  if (task.freelancer && await shouldSendNotification(task.freelancer.id, 'taskStatusChanged')) {
+  
+  if (task.freelancer) {
+    await createDbNotification(task.freelancer.id, 'status_changed', "Qayta ishlash so'raldi", msg.replace(/<[^>]*>?/gm, ''), `/tasks/${task.id}`);
+  }
+  if (task.freelancer && (await shouldSendNotification(task.freelancer.id, 'taskStatusChanged')).shouldSend) {
     await sendTelegramMessage(task.freelancer.telegramId.toString(), msg);
   }
 }
@@ -306,9 +350,17 @@ async function markAllAsRead(userId) {
 }
 
 async function createDbNotification(userId, type, title, message, actionUrl = null) {
-  return prisma.notification.create({
+  const notif = await prisma.notification.create({
     data: { userId, type, title, message, actionUrl }
   });
+
+  try {
+    getIO().to(`user_${userId}`).emit('new_notification', notif);
+  } catch (err) {
+    logger.error(`Error emitting new_notification: ${err.message}`);
+  }
+
+  return notif;
 }
 
 module.exports = {

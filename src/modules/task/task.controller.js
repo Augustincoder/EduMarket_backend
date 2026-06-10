@@ -95,9 +95,10 @@ async function cancelTask(req, res) {
 
 async function openDispute(req, res) {
   const taskId = req.params.id;
-  const { reason } = req.body;
-  if (!reason) return res.status(400).json({ success: false, message: 'Nizo sababini kiriting' });
-  const result = await taskService.openDispute(taskId, req.user.userId, reason);
+  const { reason, description, evidenceFileIds } = req.body;
+  if (!reason || !description) return res.status(400).json({ success: false, message: 'Nizo sababi va izohini kiriting' });
+  if (description.length < 50) return res.status(400).json({ success: false, message: 'Izoh kamida 50 ta belgidan iborat bo\'lishi kerak' });
+  const result = await taskService.openDispute(taskId, req.user.userId, reason, description, evidenceFileIds);
   await clearCache(`/api/v1/tasks*`);
   res.json({ success: true, message: 'Nizo ochildi', data: result.updatedTask });
 }

@@ -205,6 +205,9 @@ model Task {
   // ── File attachments (Telegram file_id strings) ──
   attachmentFileIds String[] @default([]) @map("attachment_file_ids")
 
+  // ── Category Specific Metadata (Phase 9) ──
+  metadata     Json?        @map("metadata")
+
   // ── Urgency (Phase 14) ──
   isUrgent Boolean @default(false) @map("is_urgent")
   rushFee  Int     @default(0)     @map("rush_fee")
@@ -375,11 +378,13 @@ model Dispute {
   taskId         String           @unique @map("task_id")
   openedByUserId String           @map("opened_by_user_id")
 
-  reason     String        @db.Text
-  status     DisputeStatus @default(OPEN)
-  adminNotes String?       @db.Text @map("admin_notes")
-  resolvedBy String?       @map("resolved_by")
-  resolvedAt DateTime?     @map("resolved_at")
+  reason            String        @db.VarChar(100) // E.g., NON_DELIVERY, POOR_QUALITY
+  description       String        @db.Text
+  evidenceFileIds   String[]      @default([]) @map("evidence_file_ids")
+  status            DisputeStatus @default(OPEN)
+  adminNotes        String?       @db.Text @map("admin_notes")
+  resolvedBy        String?       @map("resolved_by")
+  resolvedAt        DateTime?     @map("resolved_at")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -657,4 +662,18 @@ model TaskMilestone {
 
   @@index([taskId])
   @@map("task_milestones")
+}
+
+// ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+model FileViewLog {
+  id        String   @id @default(cuid())
+  fileId    String   @map("file_id")
+  userId    String   @map("user_id")
+  ipAddress String?  @map("ip_address")
+  userAgent String?  @map("user_agent")
+  viewedAt  DateTime @default(now()) @map("viewed_at")
+
+  @@index([fileId, userId])
+  @@map("file_view_logs")
 }

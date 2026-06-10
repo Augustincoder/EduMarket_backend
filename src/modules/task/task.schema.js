@@ -19,6 +19,9 @@ const createTaskSchema = z.object({
   
   // Phase 14 enhancements
   isUrgent: z.boolean().optional().default(false),
+  
+  // Phase 9 enhancements
+  metadata: z.record(z.any()).optional(),
 }).refine(data => data.priceMax >= data.priceMin, {
   message: 'Maksimal narx minimal narxdan kam bo\'lishi mumkin emas',
   path: ['priceMax']

@@ -43,6 +43,27 @@ router.get(
   asyncHandler(fileController.getFileUrl)
 );
 
+
+// ─── Phase 13: Secure Ephemeral Streaming ──────────────────────────────────────
+
+// GET /api/v1/files/:fileId/secure-token
+// Returns a 60-second JWT token to view the file
+router.get(
+  '/:fileId/secure-token',
+  requireAuth,
+  asyncHandler(fileController.getSecureToken)
+);
+
+// GET /api/v1/files/stream/:token
+// Returns the actual file binary stream (used by EduViewer)
+// NO requireAuth because the token is the authentication
+router.get(
+  '/stream/:token',
+  asyncHandler(fileController.streamSecureFile)
+);
+
+// ───────────────────────────────────────────────────────────────────────────────
+
 // DELETE /api/v1/files/:fileId
 // Delete a file from R2 storage
 router.delete(

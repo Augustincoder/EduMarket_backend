@@ -168,6 +168,9 @@ function initSocket(httpServer) {
     const userId = socket.user.userId;
     logger.info(`Socket connected: ${socket.id} (User: ${userId})`);
 
+    // Join personal notification/event room
+    socket.join(`user_${userId}`);
+
     // Track connection status
     handleUserConnect(userId, socket.id).catch(err => logger.error(`Error handling connect presence: ${err.message}`));
 

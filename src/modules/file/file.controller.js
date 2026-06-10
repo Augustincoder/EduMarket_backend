@@ -164,7 +164,40 @@ async function deleteFile(req, res) {
   });
 }
 
+
+/**
+ * GET /api/v1/files/:fileId/secure-token
+ * Phase 13: Get an ephemeral token (60s) to securely view a file
+ */
+async function getSecureToken(req, res) {
+  const fileId = decodeURIComponent(req.params.fileId || '');
+  if (!fileId) throw new AppError('fileId ko\'rsatilmagan', 400);
+
+  const token = await fileService.getSecureToken(fileId, req.user.userId);
+
+  res.json({
+    success: true,
+    data: { token }
+  });
+}
+
+/**
+ * GET /api/v1/files/stream/:token
+ * Phase 13: Stream the file securely using the ephemeral token
+ * Note: No requireAuth middleware here because <canvas> fetch often 
+ * struggles with auth headers. The token ITSELF is the auth!
+ */
+async function streamSecureFile(req, res) {
+  const { token } = req.params;
+  if (!token) throw new AppError('Token kiritilmagan', 400);
+
+  // This will pipe directly to `res`
+  await fileService.streamSecureFile(token, res);
+}
+
 module.exports = {
+  getSecureToken,
+  streamSecureFile,
   uploadFiles,
   getFileUrl,
   getBatchUrls,

@@ -11,6 +11,13 @@ const updateProfileSchema = z.object({
     z.number().min(0, "Tajriba manfiy bo'lishi mumkin emas").max(50, "Maksimal tajriba 50 yil").nullable().optional()
   ),
   freelancerCategories: z.array(z.string()).max(3, 'Maksimum 3 ta kategoriya tanlash mumkin').optional(),
+  notifPrefs: z.object({
+    chatMessage: z.boolean().optional(),
+    newBid: z.boolean().optional(),
+    deadlineReminder: z.boolean().optional(),
+    taskAssigned: z.boolean().optional(),
+    taskStatusChanged: z.boolean().optional()
+  }).optional(),
 }).strict();
 
 module.exports = { updateProfileSchema };

@@ -25,7 +25,8 @@ async function createTask(clientId, data) {
       attachmentFileIds: data.attachmentFileIds || [],
       status: TASK_STATUS.OPEN,
       isUrgent: data.isUrgent,
-      rushFee
+      rushFee,
+      metadata: data.metadata || null
     }
   });
 
@@ -547,7 +548,7 @@ async function cancelTask(taskId, userId) {
   return updatedTask;
 }
 
-async function openDispute(taskId, userId, reason) {
+async function openDispute(taskId, userId, reason, description, evidenceFileIds) {
   const task = await taskRepository.findUnique({ where: { id: taskId }, include: { client: true, freelancer: true } });
   if (!task) throw new AppError('Vazifa topilmadi', 404);
   if (task.clientId !== userId && task.freelancerId !== userId) throw new AppError('Ruxsat yo\'q', 403);
@@ -560,6 +561,8 @@ async function openDispute(taskId, userId, reason) {
         taskId,
         openedByUserId: userId,
         reason,
+        description,
+        evidenceFileIds: evidenceFileIds || [],
         status: 'OPEN'
       }
     });

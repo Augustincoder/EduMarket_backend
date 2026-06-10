@@ -5,6 +5,8 @@ const r2Client = require('../../config/r2');
 const env = require('../../config/env');
 const { AppError } = require('../../middleware/errorHandler');
 const logger = require('../../utils/logger');
+const jwt = require('jsonwebtoken');
+const prisma = require('../../config/prisma');
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -185,7 +187,115 @@ async function getBatchFileUrls(objectKeys) {
     .map(r => r.value);
 }
 
+
+// ─── Phase 13: Secure File Delivery (EduViewer) ────────────────────────────────
+
+/**
+ * Generate a 60-second Ephemeral Token for viewing a file
+ * Enforces a daily view limit (e.g., 3 views per file for clients).
+ */
+async function getSecureToken(fileId, userId) {
+  if (!fileId) throw new AppError('fileId kiritilmagan', 400);
+
+  // Check rate limit (Max 3 views per day for this specific file)
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const viewsToday = await prisma.fileViewLog.count({
+    where: {
+      fileId,
+      userId,
+      viewedAt: { gte: today }
+    }
+  });
+
+  // Limit to 10 views per day to be safe, but typically 3 for non-paid.
+  // We'll use 5 as a balance.
+  if (viewsToday >= 5) {
+    throw new AppError('Ushbu faylni ko\'rish bo\'yicha kunlik limit (5) tugadi.', 429);
+  }
+
+  // Log the view
+  await prisma.fileViewLog.create({
+    data: { fileId, userId }
+  });
+
+  // Create Ephemeral Token (valid for 60 seconds)
+  const token = jwt.sign({ fileId, userId }, env.JWT_SECRET, { expiresIn: '60s' });
+  
+  return token;
+}
+
+/**
+ * Helper: Inject zero-width characters into text for Forensic Watermarking
+ */
+function injectSteganography(text, userId) {
+  // Convert userId to binary representation
+  const binary = Array.from(userId).map(char => char.charCodeAt(0).toString(2).padStart(8, '0')).join('');
+  
+  // 0 = Zero-width space (\u200B), 1 = Zero-width non-joiner (\u200C)
+  const secret = Array.from(binary).map(b => b === '0' ? '\u200B' : '\u200C').join('');
+  
+  // Inject right after the first newline or at the start
+  return secret + text;
+}
+
+/**
+ * Stream the file directly to the Express response object, 
+ * bypassing public URLs entirely.
+ */
+async function streamSecureFile(token, res) {
+  if (!token) throw new AppError('Token kiritilmagan', 401);
+
+  let decoded;
+  try {
+    decoded = jwt.verify(token, env.JWT_SECRET);
+  } catch (err) {
+    throw new AppError('Token yaroqsiz yoki muddati o\'tgan', 403);
+  }
+
+  const { fileId, userId } = decoded;
+
+  try {
+    const command = new GetObjectCommand({
+      Bucket: env.R2_BUCKET_NAME,
+      Key: fileId,
+    });
+    const s3Response = await r2Client.send(command);
+
+    // Set headers
+    res.setHeader('Content-Type', s3Response.ContentType);
+    res.setHeader('Content-Length', s3Response.ContentLength);
+    // Force inline viewing instead of attachment
+    res.setHeader('Content-Disposition', 'inline');
+
+    // Forensic Watermarking for Text/Code files
+    if (s3Response.ContentType && s3Response.ContentType.startsWith('text/')) {
+      const streamToString = async (stream) => {
+        const chunks = [];
+        for await (const chunk of stream) chunks.push(chunk);
+        return Buffer.concat(chunks).toString('utf8');
+      };
+      
+      let text = await streamToString(s3Response.Body);
+      text = injectSteganography(text, userId);
+      
+      res.setHeader('Content-Length', Buffer.byteLength(text, 'utf8'));
+      res.send(text);
+      return;
+    }
+
+    // Binary files (Images, PDFs) are piped directly
+    s3Response.Body.pipe(res);
+  } catch (err) {
+    logger.error(`[R2] Secure stream error for ${fileId}: ${err.message}`);
+    throw new AppError('Faylni yuklab olishda xatolik', 500);
+  }
+}
+
 module.exports = {
+  getSecureToken,
+  streamSecureFile,
   uploadFile,
   getFileUrl,
   deleteFile,

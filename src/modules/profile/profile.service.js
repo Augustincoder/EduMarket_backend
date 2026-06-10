@@ -39,6 +39,7 @@ async function getProfile(userId) {
       isOnboardingComplete: true,
       verificationStatus: true,
       isVerifiedStudent: true,
+      notifPrefs: true,
       createdAt: true,
       _count: {
         select: {
@@ -136,7 +137,8 @@ async function updateProfile(userId, data) {
       isFreelancer: true,
       freelancerCategories: true,
       freelancerBio: true,
-      freelancerExperience: true
+      freelancerExperience: true,
+      notifPrefs: true
     }
   });
   
