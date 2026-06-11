@@ -303,6 +303,9 @@ model ChatMessage {
   isDeleted Boolean   @default(false) @map("is_deleted")
   deletedAt DateTime? @map("deleted_at")
 
+  // Reactions JSON array: [{ icon: "Heart", userId: "cuid" }]
+  reactions Json     @default("[]")
+
   isRead    Boolean  @default(false) @map("is_read")
   createdAt DateTime @default(now()) @map("created_at")
 

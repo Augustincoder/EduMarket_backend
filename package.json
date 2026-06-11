@@ -1,6 +1,6 @@
 {
   "name": "edumarket-backend",
-  "version": "2.2.5",
+  "version": "2.2.6",
   "description": "EduMarket - P2P student micro-task marketplace backend (Telegram Mini App)",
   "main": "server.js",
   "engines": {

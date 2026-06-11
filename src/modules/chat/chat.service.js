@@ -63,8 +63,10 @@ async function sendMessage(taskId, senderId, data) {
 
   // Telegram notification fallback if recipient is offline
   try {
-    const recipientId = task.clientId == senderId ? task.freelancerId : task.clientId;
-    if (recipientId) {
+    const recipientId = String(task.clientId) === String(senderId) ? task.freelancerId : task.clientId;
+    
+    // Prevent self-notification in any case
+    if (recipientId && String(recipientId) !== String(senderId)) {
       const recipientOnline = await isUserOnline(recipientId);
       if (!recipientOnline) {
         const sender = await prisma.user.findUnique({
@@ -267,11 +269,63 @@ async function deleteMessage(messageId, userId) {
   return deletedMessage;
 }
 
+async function toggleReaction(messageId, userId, icon) {
+  const message = await prisma.chatMessage.findUnique({ where: { id: messageId } });
+  if (!message) throw new AppError('Xabar topilmadi', 404);
+  
+  // ensure user is allowed in the task chat
+  await checkChatAccess(message.taskId, userId);
+
+  let reactions = [];
+  try {
+    reactions = typeof message.reactions === 'string' 
+      ? JSON.parse(message.reactions) 
+      : message.reactions || [];
+    
+    if (!Array.isArray(reactions)) reactions = [];
+  } catch(e) {
+    reactions = [];
+  }
+
+  // Check if this user already reacted with this icon
+  const existingReactionIndex = reactions.findIndex(r => r.userId === userId && r.icon === icon);
+
+  if (existingReactionIndex !== -1) {
+    // remove reaction
+    reactions.splice(existingReactionIndex, 1);
+  } else {
+    // add reaction
+    reactions.push({ icon, userId });
+  }
+
+  const updatedMessage = await prisma.chatMessage.update({
+    where: { id: messageId },
+    data: { reactions },
+    include: {
+      sender: { select: { id: true, fullname: true, photoUrl: true } }
+    }
+  });
+
+  try {
+    const io = getIO();
+    io.to(`task_${message.taskId}`).emit('message_reaction_updated', { 
+      messageId, 
+      taskId: message.taskId, 
+      reactions 
+    });
+  } catch (err) {
+    // ignore
+  }
+
+  return updatedMessage;
+}
+
 module.exports = {
   sendMessage,
   getMessages,
   markAsRead,
   getConversations,
   editMessage,
-  deleteMessage
+  deleteMessage,
+  toggleReaction
 };

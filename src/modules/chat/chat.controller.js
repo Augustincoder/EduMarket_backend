@@ -92,11 +92,28 @@ async function deleteMessage(req, res) {
   });
 }
 
+/**
+ * Toggle a reaction on a message
+ */
+async function toggleReaction(req, res) {
+  const messageId = req.params.messageId;
+  const userId = req.user.userId;
+  const { icon } = req.body;
+  
+  const result = await chatService.toggleReaction(messageId, userId, icon);
+  
+  res.json({
+    success: true,
+    data: result
+  });
+}
+
 module.exports = {
   sendMessage,
   getMessages,
   getConversations,
   markAsRead,
   editMessage,
-  deleteMessage
+  deleteMessage,
+  toggleReaction
 };

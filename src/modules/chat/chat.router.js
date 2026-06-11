@@ -38,4 +38,10 @@ router.delete(
   asyncHandler(chatController.deleteMessage)
 );
 
+// POST /api/v1/chat/messages/:messageId/reaction
+router.post(
+  '/messages/:messageId/reaction',
+  asyncHandler(chatController.toggleReaction)
+);
+
 module.exports = router;

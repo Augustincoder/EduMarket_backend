@@ -333,8 +333,11 @@ async function getNotifications(userId, limit = 20, cursor = null) {
 
 async function markAsRead(notificationId, userId) {
   const notif = await prisma.notification.findUnique({ where: { id: notificationId } });
-  if (!notif) throw new Error("Notification not found");
-  if (notif.userId !== userId) throw new Error("Unauthorized");
+  if (!notif) throw new Error("Bildirishnoma topilmadi");
+  
+  if (String(notif.userId) !== String(userId)) {
+    throw new Error("Siz ushbu bildirishnomaga ruxsatga ega emassiz");
+  }
   
   return prisma.notification.update({
     where: { id: notificationId },
