@@ -63,7 +63,7 @@ async function sendMessage(taskId, senderId, data) {
 
   // Telegram notification fallback if recipient is offline
   try {
-    const recipientId = task.clientId === senderId ? task.freelancerId : task.clientId;
+    const recipientId = task.clientId == senderId ? task.freelancerId : task.clientId;
     if (recipientId) {
       const recipientOnline = await isUserOnline(recipientId);
       if (!recipientOnline) {

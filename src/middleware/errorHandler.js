@@ -124,11 +124,18 @@ function errorHandler(err, req, res, next) {
 
   // ── Zod Validation Errors ──
   if (err.name === 'ZodError') {
+    const fieldErrors = err.flatten ? err.flatten().fieldErrors : {};
+    let firstErrorMsg = 'Noto\'g\'ri ma\'lumot';
+    const firstField = Object.keys(fieldErrors)[0];
+    if (firstField && fieldErrors[firstField].length > 0) {
+      firstErrorMsg = fieldErrors[firstField][0];
+    }
+    
     return res.status(400).json({
       success: false,
-      message: 'Noto\'g\'ri ma\'lumot',
+      message: firstErrorMsg,
       code: 'VALIDATION_ERROR',
-      errors: err.flatten ? err.flatten().fieldErrors : err.errors,
+      errors: fieldErrors,
     });
   }
 
