@@ -624,7 +624,6 @@ model WorkDelivery {
   clientViewedAt  DateTime?      @map("client_viewed_at")
   clientAcceptedAt DateTime?     @map("client_accepted_at")
 
-  @@index([taskId])
   @@index([freelancerId])
   @@map("work_deliveries")
 }
