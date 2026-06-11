@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [2.2.3](https://github.com/Augustincoder/EduMarket_backend/compare/v2.2.2...v2.2.3) (2026-06-11)
+
+
+### Bug Fixes
+
+* **cors:** allow baggage and sentry-trace headers for distributed tracing ([1b34b17](https://github.com/Augustincoder/EduMarket_backend/commit/1b34b17a198087748acd5572de1c2a0ee8d19358))
+
 ### [2.2.2](https://github.com/Augustincoder/EduMarket_backend/compare/v2.2.1...v2.2.2) (2026-06-11)
 
 
