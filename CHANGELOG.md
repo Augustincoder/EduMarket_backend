@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [2.2.1](https://github.com/Augustincoder/EduMarket_backend/compare/v2.2.0...v2.2.1) (2026-06-11)
+
+
+### Bug Fixes
+
+* **category:** remove catchAsync import and use global asyncHandler ([91e03f3](https://github.com/Augustincoder/EduMarket_backend/commit/91e03f3b7eaef1b2bb3eaa6c97792192e68ebb83))
+
 ## 2.2.0 (2026-06-11)
 
 
