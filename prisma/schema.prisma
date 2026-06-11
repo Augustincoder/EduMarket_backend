@@ -290,9 +290,10 @@ model ChatMessage {
   senderId String @map("sender_id")
 
   content  String? @db.Text
-  fileId   String? @map("file_id")
-  fileType String? @map("file_type")  // "document" | "photo" | "video"
-  fileName String? @map("file_name")
+  fileId       String? @map("file_id")
+  fileType     String? @map("file_type")  // "document" | "photo" | "video"
+  fileName     String? @map("file_name")
+  isSecureFile Boolean @default(false) @map("is_secure_file")
 
   // ── Reply, Edit, Delete (Stage 6: Chat & Notifications) ──
   replyToId String?       @map("reply_to_id")

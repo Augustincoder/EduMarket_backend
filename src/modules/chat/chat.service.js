@@ -41,6 +41,7 @@ async function sendMessage(taskId, senderId, data) {
       fileId: data.fileId,
       fileType: data.fileType,
       fileName: data.fileName,
+      isSecureFile: data.isSecureFile || false,
       replyToId: data.replyToId,
       isRead: false
     },

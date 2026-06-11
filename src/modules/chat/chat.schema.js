@@ -5,6 +5,7 @@ const sendMessageSchema = z.object({
   fileId: z.string().optional().nullable(),
   fileType: z.enum(['photo', 'document', 'video', 'voice']).optional().nullable(),
   fileName: z.string().optional().nullable(),
+  isSecureFile: z.boolean().optional().default(false),
   replyToId: z.string().optional().nullable(),
 }).refine(data => (data.content && data.content.trim().length > 0) || data.fileId, {
   message: "Xabar matni yoki fayl yuborilishi shart",
