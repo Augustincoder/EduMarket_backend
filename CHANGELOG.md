@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [2.2.5](https://github.com/Augustincoder/EduMarket_backend/compare/v2.2.4...v2.2.5) (2026-06-11)
+
+
+### Bug Fixes
+
+* category schema validation format ([d33d9fe](https://github.com/Augustincoder/EduMarket_backend/commit/d33d9fef7ade2073a75f03546d7764d35832ba99))
+
 ### [2.2.4](https://github.com/Augustincoder/EduMarket_backend/compare/v2.2.3...v2.2.4) (2026-06-11)
 
 
