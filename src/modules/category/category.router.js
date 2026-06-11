@@ -2,6 +2,8 @@ const express = require('express');
 const categoryController = require('./category.controller');
 const categorySchema = require('./category.schema');
 const authController = require('../auth/auth.controller');
+const { requireAuth } = require('../../middleware/auth');
+const { requireAdmin } = require('../../middleware/adminOnly');
 const { validate } = require('../../middleware/validate');
 const { asyncHandler } = require('../../middleware/errorHandler');
 
@@ -11,8 +13,8 @@ const router = express.Router();
 router.get('/', asyncHandler(categoryController.getPublicCategories));
 
 // Protected routes for ADMIN
-router.use(authController.protect);
-router.use(authController.restrictTo('ADMIN'));
+router.use(requireAuth);
+router.use(requireAdmin);
 
 router.route('/admin')
   .get(asyncHandler(categoryController.getAdminCategories))
