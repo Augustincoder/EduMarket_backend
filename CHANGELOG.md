@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [2.2.4](https://github.com/Augustincoder/EduMarket_backend/compare/v2.2.3...v2.2.4) (2026-06-11)
+
+
+### Bug Fixes
+
+* chat notifications, validation errors, and notification markAsRead bugs ([0b629e8](https://github.com/Augustincoder/EduMarket_backend/commit/0b629e811056579cd270893b083456f80f0e5103))
+
 ### [2.2.3](https://github.com/Augustincoder/EduMarket_backend/compare/v2.2.2...v2.2.3) (2026-06-11)
 
 
