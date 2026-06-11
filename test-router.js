@@ -1,0 +1,1 @@
+const express = require('express'); const app = express(); app.post('/:taskId', (req, res) =; app.post('/messages/:messageId/reaction', (req, res) =; const req = { method: 'POST', url: '/messages/123/reaction' }; const res = { send: console.log }; app.handle(req, res);  
