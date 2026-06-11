@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [2.2.2](https://github.com/Augustincoder/EduMarket_backend/compare/v2.2.1...v2.2.2) (2026-06-11)
+
+
+### Bug Fixes
+
+* **category:** fix missing and invalid auth middleware imports ([973447a](https://github.com/Augustincoder/EduMarket_backend/commit/973447aa7da6855d205e66578747a0ff2f3f75a9))
+
 ### [2.2.1](https://github.com/Augustincoder/EduMarket_backend/compare/v2.2.0...v2.2.1) (2026-06-11)
 
 
