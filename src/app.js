@@ -68,7 +68,7 @@ const corsOptions = {
   },
   credentials: true, // Required for cookies
   methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Telegram-Bot-Api-Secret-Token'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Telegram-Bot-Api-Secret-Token', 'baggage', 'sentry-trace'],
 };
 
 // ─── App factory ──────────────────────────────────────────────────────────────
