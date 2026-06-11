@@ -24,14 +24,12 @@ enum TaskStatus {
   DISPUTED
 }
 
-enum TaskCategory {
-  KONSPEKT     // Lecture notes
-  SLAYD        // Slides / presentations
-  TARJIMA      // Translation
-  KURS_ISHI    // Course work / term paper
-  REFERAT      // Essay / referat
-  LABORATORIYA // Lab report
-  BOSHQA       // Other
+enum FormType {
+  ACADEMIC
+  PROGRAMMING
+  TRANSLATION
+  DESIGN
+  GENERAL
 }
 
 enum UserRole {
@@ -192,7 +190,7 @@ model Task {
   clientId     String          @map("client_id")
   freelancerId String?         @map("freelancer_id")
 
-  category     TaskCategory
+  category     String       @default("BOSHQA") // Changed to String for dynamic categories
   title        String       @db.VarChar(200)
   description  String       @db.Text
   priceMin     Int          @map("price_min")
@@ -458,7 +456,7 @@ model SavedTask {
 model Gig {
   id           String       @id @default(cuid())
   freelancerId String       @map("freelancer_id")
-  category     TaskCategory @default(BOSHQA)
+  category     String       @default("BOSHQA") // Changed to String for dynamic categories
   title        String       @db.VarChar(200)
   description  String       @db.Text
   price        Int
@@ -677,4 +675,36 @@ model FileViewLog {
 
   @@index([fileId, userId])
   @@map("file_view_logs")
+}
+
+// ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+model Category {
+  id          String   @id @default(cuid())
+  value       String   @unique
+  label       String
+  emoji       String
+  colorHex    String   @map("color_hex")
+  formType    FormType @default(GENERAL) @map("form_type")
+  sortOrder   Int      @default(0) @map("sort_order")
+  isActive    Boolean  @default(true) @map("is_active")
+  isTrending  Boolean  @default(false) @map("is_trending")
+
+  skills      Skill[]
+
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("categories")
+}
+
+model Skill {
+  id          String   @id @default(cuid())
+  categoryId  String   @map("category_id")
+  name        String   @unique
+  
+  category    Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@index([categoryId])
+  @@map("skills")
 }
