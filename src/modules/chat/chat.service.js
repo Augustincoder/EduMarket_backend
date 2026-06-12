@@ -302,7 +302,7 @@ async function toggleReaction(messageId, userId, icon) {
     where: { id: messageId },
     data: { reactions },
     include: {
-      sender: { select: { id: true, fullname: true, photoUrl: true } }
+      sender: { select: { id: true, fullname: true, avatarUrl: true } }
     }
   });
 
