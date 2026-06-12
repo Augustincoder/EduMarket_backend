@@ -2,10 +2,10 @@ const { z } = require('zod');
 
 // Schema for creating a new task
 const createTaskSchema = z.object({
-  category: z.enum(['KONSPEKT', 'SLAYD', 'TARJIMA', 'KURS_ISHI', 'REFERAT', 'LABORATORIYA', 'BOSHQA'], {
+  category: z.string({
     required_error: 'Kategoriya tanlash majburiy',
     invalid_type_error: 'Noto\'g\'ri kategoriya'
-  }),
+  }).min(1, 'Kategoriya tanlash majburiy'),
   title: z.string()
     .min(10, 'Sarlavha kamida 10 ta belgidan iborat bo\'lishi kerak')
     .max(200, 'Sarlavha 200 ta belgidan oshmasligi kerak'),
@@ -34,7 +34,7 @@ const createTaskSchema = z.object({
 const listTasksSchema = z.object({
   cursor: z.string().optional(),
   limit: z.string().regex(/^\d+$/).transform(Number).optional().default('20'),
-  category: z.enum(['KONSPEKT', 'SLAYD', 'TARJIMA', 'KURS_ISHI', 'REFERAT', 'LABORATORIYA', 'BOSHQA']).optional(),
+  category: z.string().optional(),
   status: z.enum(['OPEN', 'ASSIGNED', 'IN_PROGRESS', 'IN_REVIEW', 'COMPLETED', 'CANCELED', 'DISPUTED']).optional(),
   
   // Phase 14 Advanced search
