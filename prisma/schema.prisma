@@ -13,6 +13,12 @@ datasource db {
 
 // в”Ђв”Ђв”Ђ ENUMS в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
+enum CollaboratorStatus {
+  INVITED
+  ACCEPTED
+  DECLINED
+}
+
 enum TaskStatus {
   OPEN
   ASSIGNED
@@ -177,6 +183,7 @@ model User {
   notifications    Notification[] @relation("UserNotifications")
   taskFlags        TaskFlag[]
   reputationDNA    ReputationDNA?
+  collaborations   TaskCollaborator[]
 
   @@index([isBanned])
   @@index([isVip])
@@ -242,6 +249,12 @@ model Task {
 
   // Phase 14 / Phase 4: Collaborative Task Rooms
   milestones      TaskMilestone[]
+
+  // Study Buddy (Co-working Mode)
+  isCoWorking      Boolean @default(false) @map("is_co_working")
+  maxCollaborators Int     @default(1)     @map("max_collaborators")
+  paymentSplitType String  @default("EQUAL") @map("payment_split_type") // "EQUAL" | "CUSTOM"
+  collaborators    TaskCollaborator[]
 
   @@index([status])
   @@index([clientId])
@@ -731,3 +744,23 @@ model ReputationDNA {
 
   @@map("reputation_dna")
 }
+
+// ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+model TaskCollaborator {
+  id           String             @id @default(cuid())
+  taskId       String             @map("task_id")
+  freelancerId String             @map("freelancer_id")
+  sharePercent Int                // 0-100 foiz
+  status       CollaboratorStatus @default(INVITED)
+  
+  task         Task               @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  freelancer   User               @relation(fields: [freelancerId], references: [id])
+
+  createdAt    DateTime           @default(now()) @map("created_at")
+  updatedAt    DateTime           @updatedAt @map("updated_at")
+
+  @@unique([taskId, freelancerId])
+  @@map("task_collaborators")
+}
+

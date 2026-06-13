@@ -80,10 +80,28 @@ async function getTaskBids(req, res) {
   });
 }
 
+/**
+ * Client assembles a team for a co-working task
+ */
+async function assembleTeam(req, res) {
+  const taskId = req.params.id;
+  const clientId = req.user.userId;
+  const teamMembers = req.body.teamMembers; // array of { bidId, freelancerId, sharePercent }
+
+  const task = await bidService.assembleTeam(taskId, clientId, teamMembers);
+
+  res.json({
+    success: true,
+    message: 'Jamoa yig\'ildi. Vazifa "Bajarilmoqda" holatiga o\'tdi.',
+    data: task
+  });
+}
+
 module.exports = {
   placeBid,
   acceptBid,
   createCounterOffer,
   acceptCounterOffer,
-  getTaskBids
+  getTaskBids,
+  assembleTeam
 };

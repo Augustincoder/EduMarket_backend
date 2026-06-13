@@ -166,10 +166,47 @@ async function acceptCounterOffer(bidId, freelancerId) {
   }
 }
 
+/**
+ * Client assembles a team for a co-working task
+ */
+async function assembleTeam(taskId, clientId, teamMembers) {
+  const task = await taskRepository.findById(taskId);
+  if (!task) throw new AppError('Vazifa topilmadi', 404);
+  if (task.clientId !== clientId) throw new AppError('Ruxsat yo\'q', 403);
+  if (!task.isCoWorking) throw new AppError('Vazifa jamoaviy emas', 400);
+
+  validateTransition(task.status, TASK_STATUS.ASSIGNED);
+
+  if (!teamMembers || teamMembers.length === 0) {
+    throw new AppError('Jamoa a\'zolari tanlanmagan', 400);
+  }
+  if (teamMembers.length > task.maxCollaborators) {
+    throw new AppError(`Maksimal jamoa a'zolari soni ${task.maxCollaborators} kishi`, 400);
+  }
+
+  const totalShare = teamMembers.reduce((acc, curr) => acc + curr.sharePercent, 0);
+  if (totalShare !== 100) {
+    throw new AppError('Foizlar yig\'indisi 100% ga teng bo\'lishi kerak', 400);
+  }
+
+  try {
+    const updatedTask = await bidRepository.assembleTeamTransaction(taskId, teamMembers);
+    
+    // Notify all accepted freelancers
+    for (const member of teamMembers) {
+      await notificationService.notifyTaskAssigned(member.freelancerId, task.title, taskId);
+    }
+    return updatedTask;
+  } catch (err) {
+    throw new AppError(err.message, 400);
+  }
+}
+
 module.exports = {
   createBid,
   getTaskBids,
   acceptBid,
   createCounterOffer,
-  acceptCounterOffer
+  acceptCounterOffer,
+  assembleTeam
 };

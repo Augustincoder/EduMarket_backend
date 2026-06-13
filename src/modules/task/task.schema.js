@@ -22,6 +22,11 @@ const createTaskSchema = z.object({
   
   // Phase 9 enhancements
   metadata: z.record(z.any()).optional(),
+
+  // Study Buddy enhancements
+  isCoWorking: z.boolean().optional().default(false),
+  maxCollaborators: z.number().int().min(1).max(4).optional().default(1),
+  paymentSplitType: z.enum(['EQUAL', 'CUSTOM']).optional().default('EQUAL'),
 }).refine(data => data.priceMax >= data.priceMin, {
   message: 'Maksimal narx minimal narxdan kam bo\'lishi mumkin emas',
   path: ['priceMax']

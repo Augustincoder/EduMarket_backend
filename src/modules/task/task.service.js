@@ -26,7 +26,10 @@ async function createTask(clientId, data) {
       status: TASK_STATUS.OPEN,
       isUrgent: data.isUrgent,
       rushFee,
-      metadata: data.metadata || null
+      metadata: data.metadata || null,
+      isCoWorking: data.isCoWorking || false,
+      maxCollaborators: data.maxCollaborators || 1,
+      paymentSplitType: data.paymentSplitType || 'EQUAL'
     }
   });
 
@@ -94,6 +97,22 @@ async function getTaskById(id) {
       bids: {
         where: { isAccepted: true },
         select: { id: true, proposedPrice: true, message: true }
+      },
+      // Include collaborators for co-working
+      collaborators: {
+        include: {
+          freelancer: {
+            select: {
+              id: true,
+              fullname: true,
+              avatarUrl: true,
+              ratingSum: true,
+              ratingCount: true,
+              isVip: true,
+              badge: true
+            }
+          }
+        }
       },
       dispute: {
         select: {
@@ -488,23 +507,39 @@ async function getDeliveryFiles(taskId, userId, type = 'preview') {
 async function acceptDelivery(taskId, clientId) {
   const { updatedTask } = await _changeTaskState(taskId, TASK_STATUS.COMPLETED, clientId, 'CLIENT');
   
-  // Phase 5: Referral Bonus Logic (5%)
+  // Phase 5: Referral Bonus Logic (5%) & Escrow distribution logic
   try {
-    if (updatedTask.freelancerId) {
-      const freelancer = await prisma.user.findUnique({ where: { id: updatedTask.freelancerId } });
-      if (freelancer && freelancer.referredBy) {
-        // Find accepted bid price
-        const acceptedBid = await prisma.bid.findFirst({
-          where: { taskId, isAccepted: true }
+    const price = updatedTask.agreedPrice || 0;
+    
+    if (price > 0) {
+      let payoutList = [];
+
+      if (updatedTask.isCoWorking) {
+        // Fetch all collaborators
+        const collabs = await prisma.taskCollaborator.findMany({
+          where: { taskId, status: 'ACCEPTED' },
+          include: { freelancer: true }
         });
         
-        const price = acceptedBid?.counterAccepted ? acceptedBid.counterPrice : (acceptedBid?.proposedPrice || 0);
-        
-        if (price > 0) {
-          const bonusAmount = Math.floor(price * 0.05); // 5% bonus
-          
+        collabs.forEach(c => {
+          const amount = Math.floor(price * (c.sharePercent / 100));
+          payoutList.push({ freelancer: c.freelancer, amount });
+        });
+      } else if (updatedTask.freelancerId) {
+        const freelancer = await prisma.user.findUnique({ where: { id: updatedTask.freelancerId } });
+        if (freelancer) {
+          payoutList.push({ freelancer, amount: price });
+        }
+      }
+
+      // Distribute referral bonuses based on the specific payout list
+      for (const payout of payoutList) {
+        const freelancer = payout.freelancer;
+        const amount = payout.amount;
+
+        if (freelancer && freelancer.referredBy) {
+          const bonusAmount = Math.floor(amount * 0.05); // 5% bonus from their share
           if (bonusAmount > 0) {
-            // Give bonus to referrer
             await prisma.$transaction([
               prisma.user.update({
                 where: { id: freelancer.referredBy },

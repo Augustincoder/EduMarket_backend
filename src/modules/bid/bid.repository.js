@@ -103,6 +103,50 @@ class BidRepository {
     });
   }
 
+  async assembleTeamTransaction(taskId, teamMembers) {
+    return prisma.$transaction(async (tx) => {
+      // 1. Update task to ASSIGNED.
+      // We set freelancerId to the first member's ID as the "lead", just to keep schema relations intact
+      // if we don't want to make freelancerId an array. But TaskCollaborator tracks everyone.
+      const leadFreelancer = teamMembers[0].freelancerId;
+      
+      const updateResult = await tx.task.updateMany({
+        where: { id: taskId, status: 'OPEN' },
+        data: {
+          status: 'ASSIGNED',
+          freelancerId: leadFreelancer,
+          assignedAt: new Date()
+        }
+      });
+
+      if (updateResult.count === 0) {
+        throw new Error('Vazifa allaqachon tayinlangan yoki yopilgan');
+      }
+
+      // 2. Mark bids as accepted and create Collaborator records
+      for (const member of teamMembers) {
+        // Accept bid
+        await tx.bid.update({
+          where: { id: member.bidId },
+          data: { isAccepted: true }
+        });
+
+        // Create TaskCollaborator
+        await tx.taskCollaborator.create({
+          data: {
+            taskId: taskId,
+            freelancerId: member.freelancerId,
+            sharePercent: member.sharePercent,
+            status: 'ACCEPTED'
+          }
+        });
+      }
+
+      // 3. Return updated task
+      return tx.task.findUnique({ where: { id: taskId }, include: { collaborators: true } });
+    });
+  }
+
   async delete(id) {
     return prisma.bid.delete({
       where: { id }

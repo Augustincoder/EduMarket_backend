@@ -31,6 +31,13 @@ router.post(
   asyncHandler(bidController.acceptBid)
 );
 
+// POST /api/v1/bids/task/:id/assemble-team - Client assembles a team
+router.post(
+  '/task/:id/assemble-team',
+  requireAuth,
+  asyncHandler(bidController.assembleTeam)
+);
+
 // POST /api/v1/bids/:bidId/counter - Client sends counter-offer
 router.post(
   '/:bidId/counter',
