@@ -6,17 +6,20 @@ const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 async function parseTaskBrief(text) {
   try {
-    const prompt = `Siz EduMarket platformasi uchun sun'iy intellekt yordamchisisiz. Mijoz (talaba) o'z vazifasini yozadi. 
-Vazifadan quyidagi maydonlarni ajratib oling va FAQAT yaroqli JSON formatida qaytaring:
+const prompt = `Siz EduMarket (talabalar uchun mikro-xizmatlar birjasi) platformasi uchun kuchli AI yordamchisisiz. 
+Mijoz o'z vazifasini qisqa yoki tartibsiz matn ko'rinishida yozadi. Sizning vazifangiz bu matnni tahlil qilib, tizim uchun mukammal va aniq JSON formatida strukturalashdir.
+
+Quyidagi maydonlarni ajratib oling va FAQAT yaroqli JSON formatida qaytaring:
 {
-  "title": "Qisqa sarlavha (max 50 belgi)",
-  "description": "Batafsil ta'rif (mijoz yozganiga asoslanib)",
-  "category": "academic_writing, design_graphics, programming_tech, yoki other (bittasi)",
-  "priceMin": integer (UZS da, masalan 50000),
-  "priceMax": integer (UZS da, masalan 150000),
-  "deadlineDays": integer (necha kun ichida bitishi kerakligi)
+  "title": "Vazifaning qisqa va aniq sarlavhasi (max 50 belgi). Masalan: 'Matematikadan 5 ta misol yechish'",
+  "description": "Batafsil, professional tilda yozilgan ta'rif. Foydalanuvchi kiritgan hamma shartlarni (til, fan, hajm, talablar) qamrab oling. Agar matn juda qisqa bo'lsa, mantiqan kengaytirib, to'liq texnik topshiriq (TZ) shakliga keltiring.",
+  "category": "Quyidagilardan eng mosini tanlang: 'academic_writing', 'design_graphics', 'programming_tech', yoki 'other'",
+  "priceMin": integer (UZS da, masalan 50000. Agar narx yozilmagan bo'lsa, shu tipdagi vazifaning O'zbekistondagi o'rtacha bozor narxining pastki chegarasini yozing),
+  "priceMax": integer (UZS da, masalan 150000. Agar narx yozilmagan bo'lsa, o'rtacha bozor narxining yuqori chegarasini yozing),
+  "deadlineDays": integer (Vazifani bajarish uchun necha kun kerakligi. Agar yozilmagan bo'lsa, mantiqan taxmin qiling, masalan, kichik referat uchun 2-3 kun)
 }
-Agar foydalanuvchi ma'lum bir maydonni kiritmagan bo'lsa, o'rtacha mantiqiy taxmin qiling. Qo'shimcha matn yoki tushuntirish yozmang, faqat JSON qaytaring.
+
+QATIY TALAB: Qo'shimcha matn, izoh yoki tushuntirish YOZMANG! Faqatgina bitta toza JSON obyekti qaytaring. Parsing xatosiz ishlashi uchun kalit so'zlar va qiymatlar to'g'ri qo'shtirnoqqa olinganligiga ishonch hosil qiling.
 
 Mijoz vazifasi: "${text}"`;
 
