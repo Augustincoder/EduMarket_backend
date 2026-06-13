@@ -2,226 +2,246 @@ const prisma = require('../../config/prisma');
 const { AppError } = require('../../middleware/errorHandler');
 const { getIO, isUserOnline, getOnlineUsersSet } = require('../../config/socket');
 const logger = require('../../utils/logger');
+const notificationService = require('../notification/notification.service');
 
 /**
- * Validates if a user has access to a task's chat
+ * 3-BOSQICH: XABARLASHISH VA TIZIM VOQEALARI (MESSAGING & EVENTS)
  */
-async function checkChatAccess(taskId, userId) {
-  const task = await prisma.task.findUnique({
-    where: { id: taskId },
-    select: { clientId: true, freelancerId: true, status: true }
+
+async function checkChatAccess(chatRoomId, userId) {
+  const participant = await prisma.chatParticipant.findUnique({
+    where: { chatRoomId_userId: { chatRoomId, userId } },
+    include: { chatRoom: true }
   });
 
-  if (!task) {
-    throw new AppError('Vazifa topilmadi', 404);
-  }
-
-  // Only client and assigned freelancer can chat
-  if (task.clientId !== userId && task.freelancerId !== userId) {
+  if (!participant) {
     throw new AppError('Ushbu chatga kirish huquqingiz yo\'q', 403);
   }
 
-  return task;
+  return participant.chatRoom;
 }
 
-/**
- * Send a message in a task's chat
- */
-async function sendMessage(taskId, senderId, data) {
-  const task = await checkChatAccess(taskId, senderId);
-
-  // Note: File handling (if data contains file_id) is handled by the controller
-  // and passed here as data.fileId, data.fileType, etc.
+// Xabar yuborish (Matn yoki Fayl)
+async function sendMessage(chatRoomId, senderId, data) {
+  const room = await checkChatAccess(chatRoomId, senderId);
 
   const message = await prisma.chatMessage.create({
     data: {
-      taskId,
+      chatRoomId,
       senderId,
+      type: data.type || 'TEXT',
       content: data.content,
       fileId: data.fileId,
       fileType: data.fileType,
       fileName: data.fileName,
       isSecureFile: data.isSecureFile || false,
       replyToId: data.replyToId,
-      isRead: false
+      metadata: data.metadata || null
     },
     include: {
+      sender: { select: { id: true, fullname: true, avatarUrl: true } },
       replyTo: {
         select: { id: true, content: true, fileType: true, sender: { select: { fullname: true } } }
       }
     }
   });
 
-  // Emit Real-time Socket.io Event to the task room
+  // Socket.io
   try {
     const io = getIO();
-    const roomName = `task_${taskId}`;
-    io.to(roomName).emit('new_message', message);
-  } catch (err) {
-    // Ignored: socket might not be initialized during test/startup
-  }
+    io.to(`chat_${chatRoomId}`).emit('new_message', message);
+  } catch (err) {}
 
-  // Telegram notification fallback if recipient is offline
+  // Offline Notification
   try {
-    const recipientId = String(task.clientId) === String(senderId) ? task.freelancerId : task.clientId;
-    
-    // Prevent self-notification in any case
-    if (recipientId && String(recipientId) !== String(senderId)) {
-      const recipientOnline = await isUserOnline(recipientId);
-      if (!recipientOnline) {
-        const sender = await prisma.user.findUnique({
-          where: { id: senderId },
-          select: { fullname: true }
-        });
-        const senderName = sender ? sender.fullname : 'Foydalanuvchi';
-        const notificationService = require('../notification/notification.service');
-        notificationService.notifyChatMessage(recipientId, senderName, taskId)
-          .catch(err => logger.error(`Failed to send Telegram notification: ${err.message}`));
+    const participants = await prisma.chatParticipant.findMany({
+      where: { chatRoomId, userId: { not: senderId } }
+    });
+
+    const senderName = message.sender?.fullname || 'Foydalanuvchi';
+
+    for (const p of participants) {
+      const isOnline = await isUserOnline(p.userId);
+      if (!isOnline) {
+        notificationService.notifyChatMessage(p.userId, senderName, room.taskId || chatRoomId)
+          .catch(err => logger.error(`Telegram Notif Failed: ${err.message}`));
       }
     }
   } catch (err) {
-    logger.error(`Failed offline notification check: ${err.message}`);
+    logger.error(`Offline notification error: ${err.message}`);
   }
 
   return message;
 }
 
-/**
- * Get messages for a specific task chat (cursor-based pagination)
- */
-async function getMessages(taskId, userId, cursor, limit = 50) {
-  await checkChatAccess(taskId, userId);
+// Tizim xabari (System Event) yuborish (Bot kabi)
+async function sendSystemEvent(chatRoomId, content, metadata = null) {
+  const message = await prisma.chatMessage.create({
+    data: {
+      chatRoomId,
+      senderId: null, // Tizim xabari
+      type: 'SYSTEM_EVENT',
+      content,
+      metadata
+    }
+  });
 
-  const where = { taskId };
+  try {
+    const io = getIO();
+    io.to(`chat_${chatRoomId}`).emit('new_message', message);
+  } catch (err) {}
+
+  return message;
+}
+
+// Xabarlarni qadab qo'yish (Pin) yoki Olib tashlash (Unpin)
+async function pinMessage(chatRoomId, requesterId, messageId) {
+  const participant = await prisma.chatParticipant.findUnique({
+    where: { chatRoomId_userId: { chatRoomId, userId: requesterId } }
+  });
+
+  if (!participant || (participant.role !== 'OWNER' && participant.role !== 'ADMIN')) {
+    throw new AppError('Xabarni qadash huquqingiz yo\'q', 403);
+  }
+
+  let finalMessageId = messageId;
+  let eventText = `Xabar qadab qo'yildi.`;
+
+  if (messageId === 'unpin' || !messageId) {
+    finalMessageId = null;
+    eventText = `Qadalgan xabar olib tashlandi.`;
+  } else {
+    const message = await prisma.chatMessage.findUnique({ where: { id: messageId } });
+    if (!message || message.chatRoomId !== chatRoomId) {
+      throw new AppError('Xabar ushbu chatga tegishli emas', 404);
+    }
+  }
+
+  const room = await prisma.chatRoom.update({
+    where: { id: chatRoomId },
+    data: { pinnedMsgId: finalMessageId },
+    include: { pinnedMsg: true }
+  });
+
+  try {
+    const io = getIO();
+    io.to(`chat_${chatRoomId}`).emit('message_pinned', { chatRoomId, message: room.pinnedMsg });
+  } catch (err) {}
+
+  // Tizim xabari ham tashlab qoyamiz
+  await sendSystemEvent(chatRoomId, eventText);
+
+  return room;
+}
+
+// Cursor-based Pagination yordamida xabarlarni yuklash
+async function getMessages(chatRoomId, userId, cursor, limit = 50) {
+  await checkChatAccess(chatRoomId, userId);
+
+  const where = { chatRoomId };
   if (cursor) {
-    where.id = { lt: cursor }; // Pagination: older messages
+    where.id = { lt: cursor }; // older messages
   }
 
   const messages = await prisma.chatMessage.findMany({
     where,
     take: limit,
-    orderBy: { id: 'desc' }, // Latest first
+    orderBy: { id: 'desc' },
     include: {
-      sender: {
-        select: { id: true, fullname: true, avatarUrl: true }
-      },
+      sender: { select: { id: true, fullname: true, avatarUrl: true } },
       replyTo: {
         select: { id: true, content: true, fileType: true, sender: { select: { fullname: true } } }
       }
     }
   });
 
-  // Mark messages as read if sent by the OTHER person
-  const unreadMessageIds = messages
-    .filter(m => !m.isRead && m.senderId !== userId)
-    .map(m => m.id);
-
-  if (unreadMessageIds.length > 0) {
-    // Update and emit socket event
-    prisma.chatMessage.updateMany({
-      where: { id: { in: unreadMessageIds } },
-      data: { isRead: true }
-    }).then(() => {
-      try {
-        const io = getIO();
-        io.to(`task_${taskId}`).emit('messages_read', { taskId, readerId: userId, messageIds: unreadMessageIds });
-      } catch (e) {
-        // socket not initialized
-      }
-    }).catch(err => logger.error(`Failed to mark messages read: ${err.message}`));
-  }
-
   const nextCursor = messages.length === limit ? messages[messages.length - 1].id : null;
 
-  return {
-    messages,
-    nextCursor
-  };
-}
-
-/**
- * Mark all unread messages in a task chat as read
- */
-async function markAsRead(taskId, userId) {
-  await checkChatAccess(taskId, userId);
-
-  const unreadMessages = await prisma.chatMessage.findMany({
-    where: { taskId, isRead: false, senderId: { not: userId } },
-    select: { id: true }
+  // Shu joyda lastReadAt ni yangilaymiz
+  await prisma.chatParticipant.update({
+    where: { chatRoomId_userId: { chatRoomId, userId } },
+    data: { lastReadAt: new Date() }
   });
 
-  if (unreadMessages.length === 0) return { count: 0 };
-
-  const messageIds = unreadMessages.map(m => m.id);
-
-  await prisma.chatMessage.updateMany({
-    where: { id: { in: messageIds } },
-    data: { isRead: true }
-  });
-
-  try {
-    const io = getIO();
-    io.to(`task_${taskId}`).emit('messages_read', { taskId, readerId: userId, messageIds });
-  } catch (err) {
-    // ignore
-  }
-
-  return { count: messageIds.length };
+  return { messages, nextCursor };
 }
 
-/**
- * Barcha faol chatlarni olish (Conversations List)
- */
+// Barcha chatlar ro'yxati (Sidebar uchun)
 async function getConversations(userId) {
-  const tasks = await prisma.task.findMany({
-    where: {
-      OR: [{ clientId: userId }, { freelancerId: userId }],
-      status: { in: ['ASSIGNED', 'IN_PROGRESS', 'IN_REVIEW', 'COMPLETED'] }
-    },
+  // 1. Fetch all participants and rooms
+  const participants = await prisma.chatParticipant.findMany({
+    where: { userId },
     include: {
-      client: { select: { id: true, fullname: true, avatarUrl: true } },
-      freelancer: { select: { id: true, fullname: true, avatarUrl: true } },
-      chat: {
-        orderBy: { createdAt: 'desc' },
-        take: 1,  // Oxirgi xabar
-      },
-      _count: {
-        select: {
-          chat: {
-            where: { senderId: { not: userId }, isRead: false }
+      chatRoom: {
+        include: {
+          messages: {
+            orderBy: { createdAt: 'desc' },
+            take: 1
+          },
+          participants: {
+            include: { user: { select: { id: true, fullname: true, avatarUrl: true } } }
           }
         }
       }
     },
-    orderBy: { updatedAt: 'desc' }
+    orderBy: { chatRoom: { updatedAt: 'desc' } }
   });
-  
+
+  if (participants.length === 0) return [];
+
+  // 2. Fetch all unread counts in ONE single raw query (Fixing N+1 issue)
+  const unreadCountsRaw = await prisma.$queryRaw`
+    SELECT m."chatRoomId", COUNT(m.id)::int as "unreadCount"
+    FROM "ChatMessage" m
+    INNER JOIN "ChatParticipant" p ON m."chatRoomId" = p."chatRoomId"
+    WHERE p."userId" = ${userId}
+      AND m."senderId" IS DISTINCT FROM ${userId}
+      AND (p."lastReadAt" IS NULL OR m."createdAt" > p."lastReadAt")
+    GROUP BY m."chatRoomId"
+  `;
+
+  // Map counts to an object for O(1) lookup
+  const unreadCountsMap = {};
+  for (const row of unreadCountsRaw) {
+    unreadCountsMap[row.chatRoomId] = row.unreadCount;
+  }
+
+  // 3. Get online users
   const onlineUsers = await getOnlineUsersSet();
-  
-  const result = tasks.map((task) => {
-    const otherUser = task.clientId === userId ? task.freelancer : task.client;
-    let otherUserOnline = false;
-    if (otherUser) {
-      otherUserOnline = onlineUsers.has(otherUser.id);
+
+  // 4. Assemble the result
+  const result = participants.map((p) => {
+    const room = p.chatRoom;
+    let title = room.name;
+    let avatar = room.avatarUrl;
+    let otherUser = null;
+
+    if (room.type === 'DIRECT') {
+      const otherParticipant = room.participants.find(part => part.userId !== userId);
+      if (otherParticipant) {
+        otherUser = otherParticipant.user;
+        title = otherUser.fullname;
+        avatar = otherUser.avatarUrl;
+        otherUser.isOnline = onlineUsers.has(otherUser.id);
+      }
     }
+
     return {
-      taskId:       task.id,
-      taskTitle:    task.title,
-      taskStatus:   task.status,
-      clientId:     task.clientId,
-      freelancerId: task.freelancerId,
-      otherUser:    otherUser ? { ...otherUser, isOnline: otherUserOnline } : null,
-      lastMessage:  task.chat[0] || null,
-      unreadCount:  task._count.chat,
+      chatRoomId: room.id,
+      type: room.type,
+      taskId: room.taskId,
+      title,
+      avatarUrl: avatar,
+      otherUser,
+      lastMessage: room.messages[0] || null,
+      unreadCount: unreadCountsMap[room.id] || 0
     };
   });
 
   return result;
 }
 
-/**
- * Edit a message
- */
+// Xabarni tahrirlash
 async function editMessage(messageId, userId, newContent) {
   const message = await prisma.chatMessage.findUnique({ where: { id: messageId } });
   if (!message) throw new AppError('Xabar topilmadi', 404);
@@ -232,27 +252,35 @@ async function editMessage(messageId, userId, newContent) {
     where: { id: messageId },
     data: { content: newContent, isEdited: true, editedAt: new Date() },
     include: {
+      sender: { select: { id: true, fullname: true, avatarUrl: true } },
       replyTo: { select: { id: true, content: true, fileType: true, sender: { select: { fullname: true } } } }
     }
   });
 
   try {
     const io = getIO();
-    io.to(`task_${message.taskId}`).emit('message_edited', updatedMessage);
-  } catch (err) {
-    // ignore
-  }
+    io.to(`chat_${message.chatRoomId}`).emit('message_edited', updatedMessage);
+  } catch (err) {}
 
   return updatedMessage;
 }
 
-/**
- * Delete a message
- */
+// Xabarni o'chirish
 async function deleteMessage(messageId, userId) {
   const message = await prisma.chatMessage.findUnique({ where: { id: messageId } });
   if (!message) throw new AppError('Xabar topilmadi', 404);
-  if (message.senderId !== userId) throw new AppError('Faqat o\'zingizning xabaringizni o\'chirishingiz mumkin', 403);
+  
+  // Owner yoki xabar egasi
+  const participant = await prisma.chatParticipant.findUnique({
+    where: { chatRoomId_userId: { chatRoomId: message.chatRoomId, userId } }
+  });
+
+  const isSender = message.senderId === userId;
+  const isAdmin = participant?.role === 'OWNER' || participant?.role === 'ADMIN';
+
+  if (!isSender && !isAdmin) {
+    throw new AppError('Xabarni o\'chirish huquqingiz yo\'q', 403);
+  }
 
   const deletedMessage = await prisma.chatMessage.update({
     where: { id: messageId },
@@ -261,76 +289,79 @@ async function deleteMessage(messageId, userId) {
 
   try {
     const io = getIO();
-    io.to(`task_${message.taskId}`).emit('message_deleted', { messageId, taskId: message.taskId });
-  } catch (err) {
-    // ignore
-  }
+    io.to(`chat_${message.chatRoomId}`).emit('message_deleted', { messageId, chatRoomId: message.chatRoomId });
+  } catch (err) {}
 
   return deletedMessage;
 }
 
+// Reaksiyalar (Like, Heart)
 async function toggleReaction(messageId, userId, icon) {
   const message = await prisma.chatMessage.findUnique({ where: { id: messageId } });
   if (!message) throw new AppError('Xabar topilmadi', 404);
   
-  // ensure user is allowed in the task chat
-  await checkChatAccess(message.taskId, userId);
+  await checkChatAccess(message.chatRoomId, userId);
 
   let reactions = [];
   try {
-    reactions = typeof message.reactions === 'string' 
-      ? JSON.parse(message.reactions) 
-      : message.reactions || [];
-    
+    reactions = typeof message.reactions === 'string' ? JSON.parse(message.reactions) : message.reactions || [];
     if (!Array.isArray(reactions)) reactions = [];
   } catch(e) {
     reactions = [];
   }
 
-  // Check if this user already reacted AT ALL
   const existingReactionIndex = reactions.findIndex(r => r.userId === userId);
 
   if (existingReactionIndex !== -1) {
     if (reactions[existingReactionIndex].icon === icon) {
-      // Toggle off if it's the exact same icon
       reactions.splice(existingReactionIndex, 1);
     } else {
-      // Switch to the new icon
       reactions[existingReactionIndex].icon = icon;
     }
   } else {
-    // Add new reaction
     reactions.push({ icon, userId });
   }
 
   const updatedMessage = await prisma.chatMessage.update({
     where: { id: messageId },
-    data: { reactions },
-    include: {
-      sender: { select: { id: true, fullname: true, avatarUrl: true } }
-    }
+    data: { reactions }
   });
 
   try {
     const io = getIO();
-    io.to(`task_${message.taskId}`).emit('message_reaction_updated', { 
+    io.to(`chat_${message.chatRoomId}`).emit('message_reaction_updated', { 
       messageId, 
-      taskId: message.taskId, 
+      chatRoomId: message.chatRoomId, 
       reactions 
     });
-  } catch (err) {
-    // ignore
-  }
+  } catch (err) {}
 
   return updatedMessage;
 }
 
+// Xabarlarni o'qilgan deb belgilash
+async function markAsRead(chatRoomId, userId) {
+  await checkChatAccess(chatRoomId, userId);
+  
+  await prisma.chatParticipant.update({
+    where: { chatRoomId_userId: { chatRoomId, userId } },
+    data: { lastReadAt: new Date() }
+  });
+  
+  // Optionally, we could update message.isRead if we were doing per-message read receipts,
+  // but cursor-based room read tracking is usually enough (Slack style).
+
+  return { success: true };
+}
+
 module.exports = {
   sendMessage,
+  sendSystemEvent,
+  pinMessage,
   getMessages,
-  markAsRead,
   getConversations,
   editMessage,
   deleteMessage,
-  toggleReaction
+  toggleReaction,
+  markAsRead
 };

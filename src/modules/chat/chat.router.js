@@ -3,45 +3,64 @@ const chatController = require('./chat.controller');
 const { requireAuth } = require('../../middleware/auth');
 const { asyncHandler } = require('../../middleware/errorHandler');
 
-// GET /api/v1/chat/:taskId - Get messages for a task
 const { validate } = require('../../middleware/validate');
-const { sendMessageSchema, editMessageSchema } = require('./chat.schema');
+const { 
+  sendMessageSchema, 
+  editMessageSchema,
+  createGroupSchema,
+  updateGroupSchema,
+  inviteUserSchema
+} = require('./chat.schema');
 
 router.use(requireAuth);
 
-// GET /api/v1/chat/conversations
-router.get('/conversations', asyncHandler(chatController.getConversations));
+/** =========================================
+ *  ROOM & INVITES (BOSQICH 1 va 2)
+ *  ========================================= */
 
-// GET /api/v1/chat/:taskId
-router.get('/:taskId', asyncHandler(chatController.getMessages));
+// Barcha chatlar ro'yxati (Sidebar uchun)
+router.get('/', asyncHandler(chatController.getConversations));
 
-// POST /api/v1/chat/:taskId
-router.post(
-  '/:taskId',
-  validate(sendMessageSchema, 'body'),
-  asyncHandler(chatController.sendMessage)
-);
+// Yangi ixtiyoriy guruh yaratish
+router.post('/group', validate(createGroupSchema, 'body'), asyncHandler(chatController.createCustomGroup));
 
-// POST /api/v1/chat/:taskId/read
-router.post('/:taskId/read', asyncHandler(chatController.markAsRead));
+// Direct chat ochish yoki olish
+router.post('/direct', asyncHandler(chatController.getOrCreateDirectChat));
 
-// PUT /api/v1/chat/messages/:messageId
-router.put(
-  '/messages/:messageId',
-  validate(editMessageSchema, 'body'),
-  asyncHandler(chatController.editMessage)
-);
+// Takliflar bo'limi
+router.get('/invites', asyncHandler(chatController.getMyInvites));
+router.post('/invites/:inviteId/accept', asyncHandler(chatController.acceptInvite));
+router.post('/invites/:inviteId/reject', asyncHandler(chatController.rejectInvite));
 
-// DELETE /api/v1/chat/messages/:messageId
-router.delete(
-  '/messages/:messageId',
-  asyncHandler(chatController.deleteMessage)
-);
+// Username bo'yicha qidirib taklif yuborish
+router.get('/:chatRoomId/search-users', asyncHandler(chatController.searchUsersForInvite));
+router.post('/:chatRoomId/invite', validate(inviteUserSchema, 'body'), asyncHandler(chatController.sendInvite));
 
-// POST /api/v1/chat/messages/:messageId/reaction
-router.post(
-  '/messages/:messageId/reaction',
-  asyncHandler(chatController.toggleReaction)
-);
+// Guruh sozlamalari
+router.put('/:chatRoomId/settings', validate(updateGroupSchema, 'body'), asyncHandler(chatController.updateGroupSettings));
+router.delete('/:chatRoomId/participants/:targetUserId', asyncHandler(chatController.removeParticipant));
+router.post('/:chatRoomId/leave', asyncHandler(chatController.leaveGroup));
+router.get('/:chatRoomId/info', asyncHandler(chatController.getChatRoomInfo));
+
+/** =========================================
+ *  MESSAGING (BOSQICH 3)
+ *  ========================================= */
+
+// Xabarlarni o'qish (limit, cursor)
+router.get('/:chatRoomId/messages', asyncHandler(chatController.getMessages));
+
+// Xabarlarni o'qilgan deb belgilash
+router.post('/:chatRoomId/read', asyncHandler(chatController.markAsRead));
+
+// Yangi xabar yuborish
+router.post('/:chatRoomId/messages', validate(sendMessageSchema, 'body'), asyncHandler(chatController.sendMessage));
+
+// Xabarni qadash
+router.post('/:chatRoomId/messages/:messageId/pin', asyncHandler(chatController.pinMessage));
+
+// Xabarni tahrirlash / O'chirish / Reaksiya
+router.put('/messages/:messageId', validate(editMessageSchema, 'body'), asyncHandler(chatController.editMessage));
+router.delete('/messages/:messageId', asyncHandler(chatController.deleteMessage));
+router.post('/messages/:messageId/reaction', asyncHandler(chatController.toggleReaction));
 
 module.exports = router;

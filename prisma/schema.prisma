@@ -52,6 +52,25 @@ enum TransactionType {
   REFERRAL_BONUS
 }
 
+enum ChatType {
+  DIRECT
+  CUSTOM_GROUP
+  TASK_ROOM
+}
+
+enum MessageType {
+  TEXT
+  FILE
+  SYSTEM_EVENT
+  PAYMENT_REQ
+}
+
+enum InviteStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
 enum TransactionStatus {
   PENDING
   COMPLETED
@@ -95,19 +114,19 @@ enum VerificationStatus {
 // в”Ђв”Ђв”Ђ USER в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
 model User {
-  id String @id @default(cuid())
-  telegramId  BigInt   @unique @map("telegram_id")
-  username    String?  @unique @map("username")
-  fullname    String   @map("fullname")
-  avatarUrl   String?  @map("avatar_url")
-  role        UserRole @default(USER)
+  id         String   @id @default(cuid())
+  telegramId BigInt   @unique @map("telegram_id")
+  username   String?  @unique @map("username")
+  fullname   String   @map("fullname")
+  avatarUrl  String?  @map("avatar_url")
+  role       UserRole @default(USER)
 
   // в”Ђв”Ђ Rating (computed from sum/count to avoid float drift) в”Ђв”Ђ
   ratingSum   Int @default(0) @map("rating_sum")
   ratingCount Int @default(0) @map("rating_count")
 
   // в”Ђв”Ђ VIP / Promoted Profile в”Ђв”Ђ
-  isVip       Boolean   @default(false) @map("is_vip")
+  isVip        Boolean   @default(false) @map("is_vip")
   vipExpiresAt DateTime? @map("vip_expires_at")
 
   // в”Ђв”Ђ Profile (Phase 14) в”Ђв”Ђ
@@ -119,45 +138,45 @@ model User {
   // ── Onboarding & Freelancer (v2.0) ──
   isOnboardingComplete Boolean  @default(false) @map("is_onboarding_complete")
   isFreelancer         Boolean  @default(false) @map("is_freelancer")
-  freelancerCategories String[] @default([])    @map("freelancer_categories")
-  freelancerBio        String?  @db.Text        @map("freelancer_bio")
+  freelancerCategories String[] @default([]) @map("freelancer_categories")
+  freelancerBio        String?  @map("freelancer_bio") @db.Text
   freelancerExperience Int?     @map("freelancer_experience")
-  
-  region               String?
-  universityId         Int?     @map("university_id")
-  university           String?
-  faculty              String?
-  studyYear            Int?     @map("study_year")
-  studentCardFileId    String?  @map("student_card_file_id")
-  isVerifiedStudent    Boolean  @default(false) @map("is_verified_student")
-  verificationStatus   VerificationStatus @default(REJECTED) @map("verification_status") // REJECTED here acts as 'NOT_SUBMITTED' initially if status is PENDING/APPROVED
+
+  region             String?
+  universityId       Int?               @map("university_id")
+  university         String?
+  faculty            String?
+  studyYear          Int?               @map("study_year")
+  studentCardFileId  String?            @map("student_card_file_id")
+  isVerifiedStudent  Boolean            @default(false) @map("is_verified_student")
+  verificationStatus VerificationStatus @default(REJECTED) @map("verification_status") // REJECTED here acts as 'NOT_SUBMITTED' initially if status is PENDING/APPROVED
 
   // ── Analytics (Phase 14) ──
-  completionRate Float?   @map("completion_rate") // hisoblangan: scheduler
-  avgResponseHrs Float?   @map("avg_response_hrs")
+  completionRate Float? @map("completion_rate") // hisoblangan: scheduler
+  avgResponseHrs Float? @map("avg_response_hrs")
 
   // ── Gamification & Retention (Phase 5) ──
-  streakCount    Int       @default(0) @map("streak_count")
-  lastLoginDate  DateTime? @map("last_login_date")
-  xp             Int       @default(0) @map("xp")
-  achievements   Json      @default("[]") @map("achievements")
+  streakCount   Int       @default(0) @map("streak_count")
+  lastLoginDate DateTime? @map("last_login_date")
+  xp            Int       @default(0) @map("xp")
+  achievements  Json      @default("[]") @map("achievements")
 
   // ── Referral (Phase 14 & Phase 5) ──
-  referralCode   String?  @unique @map("referral_code")
-  referredBy     String?  @map("referred_by")
-  referralEarned Float    @default(0) @map("referral_earned")
+  referralCode   String? @unique @map("referral_code")
+  referredBy     String? @map("referred_by")
+  referralEarned Float   @default(0) @map("referral_earned")
 
   // ── Notification preferences (Phase 14) ──
-  notifPrefs Json @default("{}") @map("notif_prefs")
+  notifPrefs Json    @default("{}") @map("notif_prefs")
   pushToken  String? @map("push_token")
   // { "newBid": true, "chatMessage": true, "deadlineReminder": true,
   //   "taskAssigned": true, "reviewReminder": true }
 
   // ── Anti-fraud ──
-  lastIpAddress String?  @map("last_ip_address")
-  deviceHash    String?  @map("device_hash")
-  isBanned      Boolean  @default(false) @map("is_banned")
-  banReason     String?  @map("ban_reason")
+  lastIpAddress String? @map("last_ip_address")
+  deviceHash    String? @map("device_hash")
+  isBanned      Boolean @default(false) @map("is_banned")
+  banReason     String? @map("ban_reason")
 
   // ── Soft delete ──
   deletedAt DateTime? @map("deleted_at")
@@ -166,24 +185,27 @@ model User {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   // ── Relations ──
-  clientTasks     Task[]    @relation("ClientTasks")
-  freelancerTasks Task[]    @relation("FreelancerTasks")
-  bids            Bid[]
-  sentMessages    ChatMessage[] @relation("SentMessages")
-  reviewsGiven    Review[]  @relation("ReviewsGiven")
-  reviewsReceived Review[]  @relation("ReviewsReceived")
-  vipPayments     VipPayment[]
-  transactions    TransactionLog[]
-  savedTasks      SavedTask[]
-  gigs            Gig[]
-  portfolioItems  PortfolioItem[]
-  reportsSubmitted Report[] @relation("ReporterRelation")
-  reportsReceived  Report[] @relation("ReportedRelation")
+  clientTasks          Task[]                @relation("ClientTasks")
+  freelancerTasks      Task[]                @relation("FreelancerTasks")
+  bids                 Bid[]
+  sentMessages         ChatMessage[]         @relation("SentMessages")
+  chatParticipations   ChatParticipant[]     @relation("ChatParticipations")
+  invitesSent          ChatInvite[]          @relation("InvitesSent")
+  invitesReceived      ChatInvite[]          @relation("InvitesReceived")
+  reviewsGiven         Review[]              @relation("ReviewsGiven")
+  reviewsReceived      Review[]              @relation("ReviewsReceived")
+  vipPayments          VipPayment[]
+  transactions         TransactionLog[]
+  savedTasks           SavedTask[]
+  gigs                 Gig[]
+  portfolioItems       PortfolioItem[]
+  reportsSubmitted     Report[]              @relation("ReporterRelation")
+  reportsReceived      Report[]              @relation("ReportedRelation")
   verificationRequests VerificationRequest[]
-  notifications    Notification[] @relation("UserNotifications")
-  taskFlags        TaskFlag[]
-  reputationDNA    ReputationDNA?
-  collaborations   TaskCollaborator[]
+  notifications        Notification[]        @relation("UserNotifications")
+  taskFlags            TaskFlag[]
+  reputationDNA        ReputationDNA?
+  collaborations       TaskCollaborator[]
 
   @@index([isBanned])
   @@index([isVip])
@@ -194,29 +216,29 @@ model User {
 // ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 model Task {
-  id String @id @default(cuid())
-  clientId     String          @map("client_id")
-  freelancerId String?         @map("freelancer_id")
+  id           String  @id @default(cuid())
+  clientId     String  @map("client_id")
+  freelancerId String? @map("freelancer_id")
 
-  category     String       @default("BOSHQA") // Changed to String for dynamic categories
-  title        String       @db.VarChar(200)
-  description  String       @db.Text
-  priceMin     Int          @map("price_min")
-  priceMax     Int          @map("price_max")
-  agreedPrice  Int?         @map("agreed_price")
+  category    String @default("BOSHQA") // Changed to String for dynamic categories
+  title       String @db.VarChar(200)
+  description String @db.Text
+  priceMin    Int    @map("price_min")
+  priceMax    Int    @map("price_max")
+  agreedPrice Int?   @map("agreed_price")
 
-  deadline     DateTime     @map("deadline")
-  status       TaskStatus   @default(OPEN)
+  deadline DateTime   @map("deadline")
+  status   TaskStatus @default(OPEN)
 
   // ── File attachments (Telegram file_id strings) ──
   attachmentFileIds String[] @default([]) @map("attachment_file_ids")
 
   // ── Category Specific Metadata (Phase 9) ──
-  metadata     Json?        @map("metadata")
+  metadata Json? @map("metadata")
 
   // ── Urgency (Phase 14) ──
-  isUrgent Boolean @default(false) @map("is_urgent")
-  rushFee  Int     @default(0)     @map("rush_fee")
+  isUrgent      Boolean   @default(false) @map("is_urgent")
+  rushFee       Int       @default(0) @map("rush_fee")
   promotedUntil DateTime? @map("promoted_until")
 
   // ── State transition timestamps (for anti-fraud 24h check) ──
@@ -230,16 +252,16 @@ model Task {
   deletedAt DateTime? @map("deleted_at")
 
   // Phase 8: Peer Quality Shield
-  flagCount    Int      @default(0)
+  flagCount Int @default(0)
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   // ── Relations ──
-  client     User         @relation("ClientTasks", fields: [clientId], references: [id])
-  freelancer User?        @relation("FreelancerTasks", fields: [freelancerId], references: [id])
+  client     User          @relation("ClientTasks", fields: [clientId], references: [id])
+  freelancer User?         @relation("FreelancerTasks", fields: [freelancerId], references: [id])
   bids       Bid[]
-  chat       ChatMessage[]
+  chatRooms  ChatRoom[]
   reviews    Review[]
   dispute    Dispute?
   savedBy    SavedTask[]
@@ -248,12 +270,12 @@ model Task {
   flags      TaskFlag[]
 
   // Phase 14 / Phase 4: Collaborative Task Rooms
-  milestones      TaskMilestone[]
+  milestones TaskMilestone[]
 
   // Study Buddy (Co-working Mode)
-  isCoWorking      Boolean @default(false) @map("is_co_working")
-  maxCollaborators Int     @default(1)     @map("max_collaborators")
-  paymentSplitType String  @default("EQUAL") @map("payment_split_type") // "EQUAL" | "CUSTOM"
+  isCoWorking      Boolean            @default(false) @map("is_co_working")
+  maxCollaborators Int                @default(1) @map("max_collaborators")
+  paymentSplitType String             @default("EQUAL") @map("payment_split_type") // "EQUAL" | "CUSTOM"
   collaborators    TaskCollaborator[]
 
   @@index([status])
@@ -269,19 +291,19 @@ model Task {
 // ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 model Bid {
-  id String @id @default(cuid())
-  taskId       String     @map("task_id")
-  freelancerId String     @map("freelancer_id")
+  id           String @id @default(cuid())
+  taskId       String @map("task_id")
+  freelancerId String @map("freelancer_id")
 
   message       String  @db.Text
   proposedPrice Int     @map("proposed_price")
   isAccepted    Boolean @default(false) @map("is_accepted")
 
   // ── Counter-offer (Phase 14) ──
-  counterPrice   Int?      @map("counter_price")
-  counterMessage String?   @db.Text @map("counter_message")
-  counterAt      DateTime? @map("counter_at")
-  counterAccepted Boolean  @default(false) @map("counter_accepted")
+  counterPrice    Int?      @map("counter_price")
+  counterMessage  String?   @map("counter_message") @db.Text
+  counterAt       DateTime? @map("counter_at")
+  counterAccepted Boolean   @default(false) @map("counter_accepted")
 
   createdAt DateTime @default(now()) @map("created_at")
 
@@ -297,52 +319,49 @@ model Bid {
 // ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 model ChatMessage {
-  id String @id @default(cuid())
-  taskId   String @map("task_id")
-  senderId String @map("sender_id")
+  id         String  @id @default(cuid())
+  chatRoomId String  @map("chat_room_id")
+  senderId   String? @map("sender_id")
 
-  content  String? @db.Text
+  type MessageType @default(TEXT)
+
+  content      String? @db.Text
   fileId       String? @map("file_id")
-  fileType     String? @map("file_type")  // "document" | "photo" | "video"
+  fileType     String? @map("file_type")
   fileName     String? @map("file_name")
   isSecureFile Boolean @default(false) @map("is_secure_file")
+  metadata     Json?   @map("metadata")
 
-  // ── Reply, Edit, Delete (Stage 6: Chat & Notifications) ──
-  replyToId String?       @map("reply_to_id")
-  replyTo   ChatMessage?  @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
-  replies   ChatMessage[] @relation("MessageReplies")
+  replyToId String? @map("reply_to_id")
+  reactions Json    @default("[]")
 
   isEdited  Boolean   @default(false) @map("is_edited")
   editedAt  DateTime? @map("edited_at")
   isDeleted Boolean   @default(false) @map("is_deleted")
   deletedAt DateTime? @map("deleted_at")
+  createdAt DateTime  @default(now()) @map("created_at")
 
-  // Reactions JSON array: [{ icon: "Heart", userId: "cuid" }]
-  reactions Json     @default("[]")
+  chatRoom ChatRoom      @relation(fields: [chatRoomId], references: [id], onDelete: Cascade)
+  sender   User?         @relation("SentMessages", fields: [senderId], references: [id])
+  replyTo  ChatMessage?  @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies  ChatMessage[] @relation("MessageReplies")
+  pinnedIn ChatRoom?     @relation("PinnedMessage")
 
-  isRead    Boolean  @default(false) @map("is_read")
-  createdAt DateTime @default(now()) @map("created_at")
-
-  // ── Relations ──
-  task   Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  sender User @relation("SentMessages", fields: [senderId], references: [id])
-
-  @@index([taskId])
-  @@index([senderId])
-  @@index([isRead])
-  @@index([replyToId])
+  @@index([chatRoomId])
+  @@index([createdAt])
+  @@index([chatRoomId, createdAt(sort: Desc)])
   @@map("chat_messages")
 }
 
 // ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 model Review {
-  id String @id @default(cuid())
+  id         String @id @default(cuid())
   taskId     String @map("task_id")
   fromUserId String @map("from_user_id")
   toUserId   String @map("to_user_id")
 
-  rating  Int    // 1–5 (enforced in app layer)
+  rating  Int // 1–5 (enforced in app layer)
   comment String @db.Text
 
   // Anti-fraud: only counts if IN_PROGRESS >= 24h
@@ -364,12 +383,12 @@ model Review {
 // ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 model VipPayment {
-  id String @id @default(cuid())
+  id     String @id @default(cuid())
   userId String @map("user_id")
 
-  amount           Int    // In so'm
-  packageType      String @map("package_type") // "7_DAY" | "30_DAY"
-  screenshotFileId String @map("screenshot_file_id")
+  amount           Int // In so'm
+  packageType      String  @map("package_type") // "7_DAY" | "30_DAY"
+  screenshotFileId String  @map("screenshot_file_id")
   phoneNumber      String? @map("phone_number")
 
   isApproved     Boolean   @default(false) @map("is_approved")
@@ -390,17 +409,17 @@ model VipPayment {
 // ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 model Dispute {
-  id String @id @default(cuid())
-  taskId         String           @unique @map("task_id")
-  openedByUserId String           @map("opened_by_user_id")
+  id             String @id @default(cuid())
+  taskId         String @unique @map("task_id")
+  openedByUserId String @map("opened_by_user_id")
 
-  reason            String        @db.VarChar(100) // E.g., NON_DELIVERY, POOR_QUALITY
-  description       String        @db.Text
-  evidenceFileIds   String[]      @default([]) @map("evidence_file_ids")
-  status            DisputeStatus @default(OPEN)
-  adminNotes        String?       @db.Text @map("admin_notes")
-  resolvedBy        String?       @map("resolved_by")
-  resolvedAt        DateTime?     @map("resolved_at")
+  reason          String        @db.VarChar(100) // E.g., NON_DELIVERY, POOR_QUALITY
+  description     String        @db.Text
+  evidenceFileIds String[]      @default([]) @map("evidence_file_ids")
+  status          DisputeStatus @default(OPEN)
+  adminNotes      String?       @map("admin_notes") @db.Text
+  resolvedBy      String?       @map("resolved_by")
+  resolvedAt      DateTime?     @map("resolved_at")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -415,14 +434,14 @@ model Dispute {
 // ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 model TransactionLog {
-  id String @id @default(cuid())
-  userId String @map("user_id")
+  id     String  @id @default(cuid())
+  userId String  @map("user_id")
   taskId String? @map("task_id")
 
-  amount    Int               // Positive = credit, negative = debit
+  amount    Int // Positive = credit, negative = debit
   type      TransactionType
   status    TransactionStatus @default(PENDING)
-  reference String?           // External payment ref (Click/Payme)
+  reference String? // External payment ref (Click/Payme)
   notes     String?
 
   createdAt DateTime @default(now()) @map("created_at")
@@ -439,12 +458,12 @@ model TransactionLog {
 // ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 model FraudLog {
-  id String @id @default(cuid())
+  id        String  @id @default(cuid())
   suspectId String  @map("suspect_id")
   targetId  String? @map("target_id")
 
-  type       String  // "FAKE_REVIEW" | "DUPLICATE_IP" | "SPAM_BID"
-  details    Json    // Raw evidence
+  type       String // "FAKE_REVIEW" | "DUPLICATE_IP" | "SPAM_BID"
+  details    Json // Raw evidence
   isActioned Boolean @default(false) @map("is_actioned")
 
   createdAt DateTime @default(now()) @map("created_at")
@@ -457,8 +476,8 @@ model FraudLog {
 // ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 model SavedTask {
-  userId    String      @map("user_id")
-  taskId    String      @map("task_id")
+  userId    String   @map("user_id")
+  taskId    String   @map("task_id")
   createdAt DateTime @default(now()) @map("created_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -471,18 +490,18 @@ model SavedTask {
 // ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 model Gig {
-  id           String       @id @default(cuid())
-  freelancerId String       @map("freelancer_id")
-  category     String       @default("BOSHQA") // Changed to String for dynamic categories
-  title        String       @db.VarChar(200)
-  description  String       @db.Text
+  id           String   @id @default(cuid())
+  freelancerId String   @map("freelancer_id")
+  category     String   @default("BOSHQA") // Changed to String for dynamic categories
+  title        String   @db.VarChar(200)
+  description  String   @db.Text
   price        Int
   deliveryDays Int      @map("delivery_days")
   isActive     Boolean  @default(true) @map("is_active")
   createdAt    DateTime @default(now()) @map("created_at")
 
   // в”Ђв”Ђ Relations в”Ђв”Ђ
-  freelancer   User     @relation(fields: [freelancerId], references: [id])
+  freelancer User @relation(fields: [freelancerId], references: [id])
 
   @@index([freelancerId])
   @@index([isActive])
@@ -492,14 +511,14 @@ model Gig {
 // в”Ђв”Ђв”Ђ PORTFOLIO ITEM (Phase 15) в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
 model PortfolioItem {
-  id String @id @default(cuid())
-  userId       String      @map("user_id")
-  title        String   @db.VarChar(200)
-  fileId       String   @map("file_id") // Telegram file_id
-  createdAt    DateTime @default(now()) @map("created_at")
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  title     String   @db.VarChar(200)
+  fileId    String   @map("file_id") // Telegram file_id
+  createdAt DateTime @default(now()) @map("created_at")
 
   // в”Ђв”Ђ Relations в”Ђв”Ђ
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@map("portfolio_items")
@@ -517,14 +536,14 @@ model Report {
   reason         String       @db.Text
   evidenceFileId String?      @map("evidence_file_id")
   status         ReportStatus @default(PENDING)
-  adminNotes     String?      @db.Text @map("admin_notes")
+  adminNotes     String?      @map("admin_notes") @db.Text
   resolvedById   String?      @map("resolved_by_id")
   resolvedAt     DateTime?    @map("resolved_at")
   createdAt      DateTime     @default(now()) @map("created_at")
 
-  reporter       User         @relation("ReporterRelation", fields: [reporterId], references: [id])
-  reported       User?        @relation("ReportedRelation", fields: [reportedId], references: [id])
-  task           Task?        @relation(fields: [taskId], references: [id])
+  reporter User  @relation("ReporterRelation", fields: [reporterId], references: [id])
+  reported User? @relation("ReportedRelation", fields: [reportedId], references: [id])
+  task     Task? @relation(fields: [taskId], references: [id])
 
   @@index([reporterId])
   @@index([reportedId])
@@ -557,17 +576,17 @@ model SystemSetting {
 }
 
 model VerificationRequest {
-  id String @id @default(cuid())
+  id     String @id @default(cuid())
   userId String @map("user_id")
 
-  documentType    String  @map("document_type") // "PASSPORT" | "STUDENT_ID" | "DRIVER_LICENSE"
-  documentFileId  String  @map("document_file_id")
-  selfieFileId    String  @map("selfie_file_id")
-  
-  status         VerificationStatus @default(PENDING)
-  adminNote      String? @db.Text @map("admin_note")
-  resolvedAt     DateTime? @map("resolved_at")
-  resolvedBy     String?   @map("resolved_by")
+  documentType   String @map("document_type") // "PASSPORT" | "STUDENT_ID" | "DRIVER_LICENSE"
+  documentFileId String @map("document_file_id")
+  selfieFileId   String @map("selfie_file_id")
+
+  status     VerificationStatus @default(PENDING)
+  adminNote  String?            @map("admin_note") @db.Text
+  resolvedAt DateTime?          @map("resolved_at")
+  resolvedBy String?            @map("resolved_by")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -584,7 +603,7 @@ model VerificationRequest {
 model Notification {
   id        String   @id @default(cuid())
   userId    String   @map("user_id")
-  type      String   // "SYSTEM" | "TASK" | "MESSAGE" | "TRANSACTION" | "DISPUTE" | "BID"
+  type      String // "SYSTEM" | "TASK" | "MESSAGE" | "TRANSACTION" | "DISPUTE" | "BID"
   title     String
   message   String   @db.Text
   actionUrl String?  @map("action_url")
@@ -605,8 +624,8 @@ model TaskFlag {
   reason    String   @db.Text
   createdAt DateTime @default(now()) @map("created_at")
 
-  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([taskId, userId])
   @@index([userId])
@@ -616,27 +635,27 @@ model TaskFlag {
 // ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 model WorkDelivery {
-  id              String         @id @default(cuid())
-  taskId          String         @unique @map("task_id")
-  task            Task           @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  freelancerId    String         @map("freelancer_id")
-  
+  id           String @id @default(cuid())
+  taskId       String @unique @map("task_id")
+  task         Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  freelancerId String @map("freelancer_id")
+
   // Protected preview — client sees this before accepting
-  previewFileIds  String[]       @default([]) @map("preview_file_ids")
-  previewNote     String?        @db.Text @map("preview_note")
-  
+  previewFileIds String[] @default([]) @map("preview_file_ids")
+  previewNote    String?  @map("preview_note") @db.Text
+
   // Full delivery — revealed ONLY after client leaves review
-  fullFileIds     String[]       @default([]) @map("full_file_ids")
-  fullRevealedAt  DateTime?      @map("full_revealed_at")
-  
+  fullFileIds    String[]  @default([]) @map("full_file_ids")
+  fullRevealedAt DateTime? @map("full_revealed_at")
+
   // Delivery metadata
-  submittedAt     DateTime       @default(now()) @map("submitted_at")
-  revisionCount   Int            @default(0) @map("revision_count")
-  revisionHistory Json?          @map("revision_history") // Array of {note, requestedAt, by}
-  
+  submittedAt     DateTime @default(now()) @map("submitted_at")
+  revisionCount   Int      @default(0) @map("revision_count")
+  revisionHistory Json?    @map("revision_history") // Array of {note, requestedAt, by}
+
   // Status tracking
-  clientViewedAt  DateTime?      @map("client_viewed_at")
-  clientAcceptedAt DateTime?     @map("client_accepted_at")
+  clientViewedAt   DateTime? @map("client_viewed_at")
+  clientAcceptedAt DateTime? @map("client_accepted_at")
 
   @@index([freelancerId])
   @@map("work_deliveries")
@@ -645,18 +664,18 @@ model WorkDelivery {
 // ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 model LearningPath {
-  id              String         @id @default(cuid())
-  userId          String         @unique @map("user_id")
-  
+  id     String @id @default(cuid())
+  userId String @unique @map("user_id")
+
   // Data
-  weakSkills      String[]       @default([]) @map("weak_skills")
-  strongSkills    String[]       @default([]) @map("strong_skills")
-  demandGaps      Json           @default("[]") @map("demand_gaps") // Array of categories/skills in high demand but low supply
-  suggestedCourses Json          @default("[]") @map("suggested_courses") // Array of {title, url, description}
-  
+  weakSkills       String[] @default([]) @map("weak_skills")
+  strongSkills     String[] @default([]) @map("strong_skills")
+  demandGaps       Json     @default("[]") @map("demand_gaps") // Array of categories/skills in high demand but low supply
+  suggestedCourses Json     @default("[]") @map("suggested_courses") // Array of {title, url, description}
+
   // Timestamps
-  createdAt       DateTime       @default(now()) @map("created_at")
-  updatedAt       DateTime       @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("learning_paths")
 }
@@ -664,16 +683,16 @@ model LearningPath {
 // ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 model TaskMilestone {
-  id              String         @id @default(cuid())
-  taskId          String         @map("task_id")
-  task            Task           @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  
-  title           String
-  isCompleted     Boolean        @default(false) @map("is_completed")
-  order           Int            @default(0)
-  
-  createdAt       DateTime       @default(now()) @map("created_at")
-  updatedAt       DateTime       @updatedAt @map("updated_at")
+  id     String @id @default(cuid())
+  taskId String @map("task_id")
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  title       String
+  isCompleted Boolean @default(false) @map("is_completed")
+  order       Int     @default(0)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([taskId])
   @@map("task_milestones")
@@ -696,30 +715,30 @@ model FileViewLog {
 // ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 model Category {
-  id          String   @id @default(cuid())
-  value       String   @unique
-  label       String
-  emoji       String
-  colorHex    String   @map("color_hex")
-  formType    FormType @default(GENERAL) @map("form_type")
-  sortOrder   Int      @default(0) @map("sort_order")
-  isActive    Boolean  @default(true) @map("is_active")
-  isTrending  Boolean  @default(false) @map("is_trending")
+  id         String   @id @default(cuid())
+  value      String   @unique
+  label      String
+  emoji      String
+  colorHex   String   @map("color_hex")
+  formType   FormType @default(GENERAL) @map("form_type")
+  sortOrder  Int      @default(0) @map("sort_order")
+  isActive   Boolean  @default(true) @map("is_active")
+  isTrending Boolean  @default(false) @map("is_trending")
 
-  skills      Skill[]
+  skills Skill[]
 
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("categories")
 }
 
 model Skill {
-  id          String   @id @default(cuid())
-  categoryId  String   @map("category_id")
-  name        String   @unique
-  
-  category    Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  id         String @id @default(cuid())
+  categoryId String @map("category_id")
+  name       String @unique
+
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
 
   @@index([categoryId])
   @@map("skills")
@@ -728,19 +747,19 @@ model Skill {
 // ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 model ReputationDNA {
-  id               String   @id @default(cuid())
-  userId           String   @unique @map("user_id")
-  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  completionRate   Float    @default(0) @map("completion_rate") // 0-100
-  responseSpeed    Float    @default(0) @map("response_speed") // 0-100
-  revisionRate     Float    @default(0) @map("revision_rate") // 0-100
-  deadlineAccuracy Float    @default(0) @map("deadline_accuracy") // 0-100
-  repeatClients    Float    @default(0) @map("repeat_clients") // 0-100
-  
-  totalScore       Float    @default(0) @map("total_score") // 0-5
-  updatedAt        DateTime @updatedAt @map("updated_at")
-  createdAt        DateTime @default(now()) @map("created_at")
+  id     String @id @default(cuid())
+  userId String @unique @map("user_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  completionRate   Float @default(0) @map("completion_rate") // 0-100
+  responseSpeed    Float @default(0) @map("response_speed") // 0-100
+  revisionRate     Float @default(0) @map("revision_rate") // 0-100
+  deadlineAccuracy Float @default(0) @map("deadline_accuracy") // 0-100
+  repeatClients    Float @default(0) @map("repeat_clients") // 0-100
+
+  totalScore Float    @default(0) @map("total_score") // 0-5
+  updatedAt  DateTime @updatedAt @map("updated_at")
+  createdAt  DateTime @default(now()) @map("created_at")
 
   @@map("reputation_dna")
 }
@@ -751,16 +770,74 @@ model TaskCollaborator {
   id           String             @id @default(cuid())
   taskId       String             @map("task_id")
   freelancerId String             @map("freelancer_id")
-  sharePercent Int                // 0-100 foiz
+  sharePercent Int // 0-100 foiz
   status       CollaboratorStatus @default(INVITED)
-  
-  task         Task               @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  freelancer   User               @relation(fields: [freelancerId], references: [id])
 
-  createdAt    DateTime           @default(now()) @map("created_at")
-  updatedAt    DateTime           @updatedAt @map("updated_at")
+  task       Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  freelancer User @relation(fields: [freelancerId], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@unique([taskId, freelancerId])
   @@map("task_collaborators")
 }
 
+// ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+model ChatRoom {
+  id     String   @id @default(cuid())
+  type   ChatType @default(DIRECT)
+  taskId String?  @map("task_id")
+
+  name        String?
+  avatarUrl   String?
+  pinnedMsgId String? @unique @map("pinned_message_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  task         Task?             @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  participants ChatParticipant[]
+  messages     ChatMessage[]
+  invites      ChatInvite[]
+  pinnedMsg    ChatMessage?      @relation("PinnedMessage", fields: [pinnedMsgId], references: [id], onDelete: SetNull)
+
+  @@index([taskId])
+  @@map("chat_rooms")
+}
+
+model ChatParticipant {
+  id         String @id @default(cuid())
+  chatRoomId String @map("chat_room_id")
+  userId     String @map("user_id")
+
+  role       String    @default("MEMBER")
+  lastReadAt DateTime? @map("last_read_at")
+  joinedAt   DateTime  @default(now()) @map("joined_at")
+
+  chatRoom ChatRoom @relation(fields: [chatRoomId], references: [id], onDelete: Cascade)
+  user     User     @relation("ChatParticipations", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([chatRoomId, userId])
+  @@index([chatRoomId])
+  @@map("chat_participants")
+}
+
+model ChatInvite {
+  id         String @id @default(cuid())
+  chatRoomId String @map("chat_room_id")
+  inviterId  String @map("inviter_id")
+  inviteeId  String @map("invitee_id")
+
+  status     InviteStatus @default(PENDING)
+  createdAt  DateTime     @default(now()) @map("created_at")
+  resolvedAt DateTime?    @map("resolved_at")
+
+  chatRoom ChatRoom @relation(fields: [chatRoomId], references: [id], onDelete: Cascade)
+  inviter  User     @relation("InvitesSent", fields: [inviterId], references: [id])
+  invitee  User     @relation("InvitesReceived", fields: [inviteeId], references: [id])
+
+  @@unique([chatRoomId, inviteeId])
+  @@map("chat_invites")
+}

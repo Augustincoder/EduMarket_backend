@@ -174,37 +174,34 @@ function initSocket(httpServer) {
     // Track connection status
     handleUserConnect(userId, socket.id).catch(err => logger.error(`Error handling connect presence: ${err.message}`));
 
-    // Client requests to join a task-specific chat room
-    socket.on('join_task_room', async (taskId) => {
-      // Validate that user belongs to this task
-      const task = await prisma.task.findUnique({
-        where: { id: taskId },
-        select: { clientId: true, freelancerId: true }
+    // Client requests to join a chat room
+    socket.on('join_chat_room', async (chatRoomId) => {
+      // Validate that user belongs to this chat room
+      const participant = await prisma.chatParticipant.findUnique({
+        where: { chatRoomId_userId: { chatRoomId, userId: socket.user.userId } }
       });
 
-      if (!task) return;
-      if (task.clientId !== socket.user.userId && task.freelancerId !== socket.user.userId) {
-        // User not authorized to join this task's chat
-        socket.emit('error', 'Bu vazifa chatiga kirish ruxsati yo\'q');
+      if (!participant) {
+        socket.emit('error', 'Bu chatga kirish ruxsati yo\'q');
         return;
       }
 
-      const roomName = `task_${taskId}`;
+      const roomName = `chat_${chatRoomId}`;
       socket.join(roomName);
       logger.debug(`User ${socket.user.userId} joined room ${roomName}`);
     });
 
-    socket.on('leave_task_room', (taskId) => {
-      const roomName = `task_${taskId}`;
+    socket.on('leave_chat_room', (chatRoomId) => {
+      const roomName = `chat_${chatRoomId}`;
       socket.leave(roomName);
       logger.debug(`User ${socket.user.userId} left room ${roomName}`);
     });
 
-    socket.on('typing', ({ taskId }) => {
-      if (!taskId) return;
-      const roomName = `task_${taskId}`;
+    socket.on('typing', ({ chatRoomId }) => {
+      if (!chatRoomId) return;
+      const roomName = `chat_${chatRoomId}`;
       // Broadcast to everyone in the room except the sender
-      socket.to(roomName).emit('user_typing', { taskId, userId: socket.user.userId });
+      socket.to(roomName).emit('user_typing', { chatRoomId, userId: socket.user.userId });
     });
 
     socket.on('subscribe_presence', (userIds) => {

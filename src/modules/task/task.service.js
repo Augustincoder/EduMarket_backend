@@ -122,7 +122,16 @@ async function getTaskById(id) {
           adminNotes: true
         }
       },
-      delivery: true
+      delivery: {
+        select: {
+          id: true,
+          submittedAt: true,
+          revisionCount: true,
+          clientViewedAt: true,
+          clientAcceptedAt: true,
+          fullRevealedAt: true
+        }
+      }
     }
   });
 
@@ -155,10 +164,17 @@ async function getMyTasks(userId, filters) {
     if (!user || !user.isFreelancer) {
       throw new AppError('Siz freelancer emassiz. Avval freelancer rejimini faollashtiring.', 403);
     }
-    where.freelancerId = userId;
+    where.OR = [
+      { freelancerId: userId },
+      { collaborators: { some: { freelancerId: userId, status: 'ACCEPTED' } } }
+    ];
   } else {
     // Both
-    where.OR = [{ clientId: userId }, { freelancerId: userId }];
+    where.OR = [
+      { clientId: userId },
+      { freelancerId: userId },
+      { collaborators: { some: { freelancerId: userId, status: 'ACCEPTED' } } }
+    ];
   }
 
   if (status) {
@@ -175,7 +191,7 @@ async function getMyTasks(userId, filters) {
     include: {
       client: { select: { id: true, fullname: true, avatarUrl: true } },
       freelancer: { select: { id: true, fullname: true, avatarUrl: true } },
-      _count: { select: { bids: true, chat: { where: { isRead: false, senderId: { not: userId } } } } }
+      _count: { select: { bids: true } }
     }
   });
 
@@ -653,9 +669,16 @@ async function cancelTask(taskId, userId) {
 }
 
 async function openDispute(taskId, userId, reason, description, evidenceFileIds) {
-  const task = await taskRepository.findUnique({ where: { id: taskId }, include: { client: true, freelancer: true } });
+  const task = await taskRepository.findUnique({ where: { id: taskId }, include: { client: true, freelancer: true, collaborators: true } });
   if (!task) throw new AppError('Vazifa topilmadi', 404);
-  if (task.clientId !== userId && task.freelancerId !== userId) throw new AppError('Ruxsat yo\'q', 403);
+  
+  const isClient = task.clientId === userId;
+  const isFreelancer = task.freelancerId === userId;
+  const isCollab = task.collaborators?.some(c => c.freelancerId === userId && c.status === 'ACCEPTED');
+  
+  if (!isClient && !isFreelancer && !isCollab) {
+    throw new AppError('Ruxsat yo\'q', 403);
+  }
 
   validateTransition(task.status, TASK_STATUS.DISPUTED);
 
