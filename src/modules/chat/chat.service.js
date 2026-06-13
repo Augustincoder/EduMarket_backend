@@ -287,14 +287,19 @@ async function toggleReaction(messageId, userId, icon) {
     reactions = [];
   }
 
-  // Check if this user already reacted with this icon
-  const existingReactionIndex = reactions.findIndex(r => r.userId === userId && r.icon === icon);
+  // Check if this user already reacted AT ALL
+  const existingReactionIndex = reactions.findIndex(r => r.userId === userId);
 
   if (existingReactionIndex !== -1) {
-    // remove reaction
-    reactions.splice(existingReactionIndex, 1);
+    if (reactions[existingReactionIndex].icon === icon) {
+      // Toggle off if it's the exact same icon
+      reactions.splice(existingReactionIndex, 1);
+    } else {
+      // Switch to the new icon
+      reactions[existingReactionIndex].icon = icon;
+    }
   } else {
-    // add reaction
+    // Add new reaction
     reactions.push({ icon, userId });
   }
 

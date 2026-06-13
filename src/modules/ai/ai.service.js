@@ -1,5 +1,40 @@
 const prisma = require('../../config/prisma');
 const logger = require('../../utils/logger');
+const { Groq } = require('groq-sdk');
+
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+
+async function parseTaskBrief(text) {
+  try {
+    const prompt = `Siz EduMarket platformasi uchun sun'iy intellekt yordamchisisiz. Mijoz (talaba) o'z vazifasini yozadi. 
+Vazifadan quyidagi maydonlarni ajratib oling va FAQAT yaroqli JSON formatida qaytaring:
+{
+  "title": "Qisqa sarlavha (max 50 belgi)",
+  "description": "Batafsil ta'rif (mijoz yozganiga asoslanib)",
+  "category": "academic_writing, design_graphics, programming_tech, yoki other (bittasi)",
+  "priceMin": integer (UZS da, masalan 50000),
+  "priceMax": integer (UZS da, masalan 150000),
+  "deadlineDays": integer (necha kun ichida bitishi kerakligi)
+}
+Agar foydalanuvchi ma'lum bir maydonni kiritmagan bo'lsa, o'rtacha mantiqiy taxmin qiling. Qo'shimcha matn yoki tushuntirish yozmang, faqat JSON qaytaring.
+
+Mijoz vazifasi: "${text}"`;
+
+    const chatCompletion = await groq.chat.completions.create({
+      messages: [{ role: 'user', content: prompt }],
+      model: 'llama3-8b-8192',
+      temperature: 0.1,
+      response_format: { type: "json_object" }
+    });
+
+    const content = chatCompletion.choices[0]?.message?.content;
+    const json = JSON.parse(content);
+    return json;
+  } catch (error) {
+    logger.error(`Groq AI parseTaskBrief xatosi: ${error.message}`);
+    throw new Error('AI orqali tahlil qilishda xatolik yuz berdi', { cause: error });
+  }
+}
 
 /**
  * Perform a real-time (or cached) skill gap analysis for the platform and the freelancer.
@@ -120,5 +155,6 @@ async function runNightlyAggregation() {
 
 module.exports = {
   generateLearningCompass,
-  runNightlyAggregation
+  runNightlyAggregation,
+  parseTaskBrief
 };

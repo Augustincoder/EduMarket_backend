@@ -74,8 +74,12 @@ async function processVipPayment(paymentId, adminId, isApproved, rejectReason = 
 
   return prisma.$transaction(async (tx) => {
     // 1. Update payment record
-    const updatedPayment = await tx.vipPayment.update({
-      where: { id: paymentId },
+    const updateResult = await tx.vipPayment.updateMany({
+      where: { 
+        id: paymentId,
+        isApproved: false,
+        rejectedReason: null
+      },
       data: {
         isApproved,
         approvedBy: adminId,
@@ -83,6 +87,12 @@ async function processVipPayment(paymentId, adminId, isApproved, rejectReason = 
         rejectedReason: !isApproved ? rejectReason : null
       }
     });
+
+    if (updateResult.count === 0) {
+      throw new Error('Ushbu to\'lov allaqachon ko\'rib chiqilgan');
+    }
+
+    const updatedPayment = await tx.vipPayment.findUnique({ where: { id: paymentId } });
 
     // 2. If approved, grant VIP to user
     if (isApproved) {

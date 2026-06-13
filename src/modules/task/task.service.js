@@ -347,7 +347,17 @@ async function _changeTaskState(taskId, nextState, expectedUserId, roleStr) {
     case TASK_STATUS.CANCELED: updateData.canceledAt = now; break;
   }
 
-  const updatedTask = await taskRepository.update({ where: { id: taskId }, data: updateData, include: { client: true, freelancer: true } });
+  // Optimistic concurrency control to prevent race conditions
+  const updateResult = await prisma.task.updateMany({
+    where: { id: taskId, status: task.status },
+    data: updateData
+  });
+
+  if (updateResult.count === 0) {
+    throw new AppError('Vazifa holati allaqachon o\'zgargan. Iltimos sahifani yangilang.', 409);
+  }
+
+  const updatedTask = await taskRepository.findUnique({ where: { id: taskId }, include: { client: true, freelancer: true } });
 
   try {
     const io = getIO();
