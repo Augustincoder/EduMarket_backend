@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [2.4.0] (2026-06-13)
+
+### Features
+
+* **reputation:** Implement "Reputation DNA" functionality. Add `ReputationDNA` Prisma model and `recalculateReputationDNA` logic in `reputation.service.js`. Add `/api/v1/users/:userId/reputation` endpoints.
+
 ### [2.3.0](https://github.com/Augustincoder/EduMarket_backend/compare/v2.2.6...v2.3.0) (2026-06-13)
 
 ### Features

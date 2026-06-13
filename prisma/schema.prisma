@@ -176,6 +176,7 @@ model User {
   verificationRequests VerificationRequest[]
   notifications    Notification[] @relation("UserNotifications")
   taskFlags        TaskFlag[]
+  reputationDNA    ReputationDNA?
 
   @@index([isBanned])
   @@index([isVip])
@@ -709,4 +710,24 @@ model Skill {
 
   @@index([categoryId])
   @@map("skills")
+}
+
+// ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+model ReputationDNA {
+  id               String   @id @default(cuid())
+  userId           String   @unique @map("user_id")
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  completionRate   Float    @default(0) @map("completion_rate") // 0-100
+  responseSpeed    Float    @default(0) @map("response_speed") // 0-100
+  revisionRate     Float    @default(0) @map("revision_rate") // 0-100
+  deadlineAccuracy Float    @default(0) @map("deadline_accuracy") // 0-100
+  repeatClients    Float    @default(0) @map("repeat_clients") // 0-100
+  
+  totalScore       Float    @default(0) @map("total_score") // 0-5
+  updatedAt        DateTime @updatedAt @map("updated_at")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  @@map("reputation_dna")
 }

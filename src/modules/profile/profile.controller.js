@@ -73,6 +73,25 @@ async function deleteMyProfile(req, res) {
   });
 }
 
+const reputationService = require('./reputation.service');
+
+/**
+ * Get user's Reputation DNA
+ */
+async function getUserReputationDNA(req, res) {
+  const userId = req.params.userId || req.user.userId;
+  const dna = await reputationService.getReputationDNA(userId);
+  res.json({ success: true, data: dna });
+}
+
+/**
+ * Recalculate Reputation DNA
+ */
+async function recalculateMyReputationDNA(req, res) {
+  const dna = await reputationService.recalculateReputationDNA(req.user.userId);
+  res.json({ success: true, data: dna });
+}
+
 module.exports = {
   getMyProfile,
   updateMyProfile,
@@ -80,5 +99,7 @@ module.exports = {
   getLeaderboard,
   getMyReferrals,
   updatePushToken,
-  deleteMyProfile
+  deleteMyProfile,
+  getUserReputationDNA,
+  recalculateMyReputationDNA
 };

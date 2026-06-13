@@ -31,4 +31,10 @@ router.delete('/me', requireAuth, asyncHandler(profileController.deleteMyProfile
 // GET /api/v1/users/:userId
 router.get('/:userId', cache(120), asyncHandler(profileController.getUserProfile));
 
+// GET /api/v1/users/:userId/reputation
+router.get('/:userId/reputation', asyncHandler(profileController.getUserReputationDNA));
+
+// POST /api/v1/users/me/reputation/recalculate
+router.post('/me/reputation/recalculate', asyncHandler(profileController.recalculateMyReputationDNA));
+
 module.exports = router;
