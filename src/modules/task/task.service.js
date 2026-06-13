@@ -521,8 +521,16 @@ async function acceptDelivery(taskId, clientId) {
           include: { freelancer: true }
         });
         
-        collabs.forEach(c => {
-          const amount = Math.floor(price * (c.sharePercent / 100));
+        let totalDistributed = 0;
+        collabs.forEach((c, index) => {
+          let amount;
+          if (index === collabs.length - 1) {
+            // Give remaining to the last person to avoid fractional UZS rounding loss
+            amount = price - totalDistributed;
+          } else {
+            amount = Math.floor(price * (c.sharePercent / 100));
+            totalDistributed += amount;
+          }
           payoutList.push({ freelancer: c.freelancer, amount });
         });
       } else if (updatedTask.freelancerId) {
@@ -532,19 +540,39 @@ async function acceptDelivery(taskId, clientId) {
         }
       }
 
-      // Distribute referral bonuses based on the specific payout list
+      // Distribute escrow payouts and referral bonuses
+      const dbOps = [];
       for (const payout of payoutList) {
         const freelancer = payout.freelancer;
         const amount = payout.amount;
 
-        if (freelancer && freelancer.referredBy) {
+        if (!freelancer || amount <= 0) continue;
+
+        // 1. Escrow Release
+        dbOps.push(
+          prisma.transactionLog.create({
+            data: {
+              userId: freelancer.id,
+              taskId,
+              amount,
+              type: 'ESCROW_RELEASE',
+              status: 'COMPLETED',
+              notes: updatedTask.isCoWorking ? `Study Buddy ulushi (${amount} UZS)` : 'Vazifa yakunlandi'
+            }
+          })
+        );
+
+        // 2. Referral Bonus
+        if (freelancer.referredBy) {
           const bonusAmount = Math.floor(amount * 0.05); // 5% bonus from their share
           if (bonusAmount > 0) {
-            await prisma.$transaction([
+            dbOps.push(
               prisma.user.update({
                 where: { id: freelancer.referredBy },
                 data: { referralEarned: { increment: bonusAmount } }
-              }),
+              })
+            );
+            dbOps.push(
               prisma.transactionLog.create({
                 data: {
                   userId: freelancer.referredBy,
@@ -555,9 +583,13 @@ async function acceptDelivery(taskId, clientId) {
                   notes: `${freelancer.fullname} tomonidan bajarilgan vazifadan 5% bonus`
                 }
               })
-            ]);
+            );
           }
         }
+      }
+
+      if (dbOps.length > 0) {
+        await prisma.$transaction(dbOps);
       }
     }
   } catch (err) {
