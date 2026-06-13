@@ -347,9 +347,19 @@ async function _changeTaskState(taskId, nextState, expectedUserId, roleStr) {
   if (!task) throw new AppError('Vazifa topilmadi', 404);
 
   // Authorize
-  if (roleStr === 'CLIENT' && task.clientId !== expectedUserId) throw new AppError('Siz mijoz emassiz', 403);
-  if (roleStr === 'FREELANCER' && task.freelancerId !== expectedUserId) throw new AppError('Siz ijrochi emassiz', 403);
-  if (roleStr === 'ANY_PARTICIPANT' && task.clientId !== expectedUserId && task.freelancerId !== expectedUserId) {
+  const isClient = task.clientId === expectedUserId;
+  let isFreelancer = task.freelancerId === expectedUserId;
+  
+  if (!isFreelancer && task.isCoWorking) {
+    const collab = await prisma.taskCollaborator.findUnique({
+      where: { taskId_freelancerId: { taskId, freelancerId: expectedUserId } }
+    });
+    if (collab && collab.status === 'ACCEPTED') isFreelancer = true;
+  }
+
+  if (roleStr === 'CLIENT' && !isClient) throw new AppError('Siz mijoz emassiz', 403);
+  if (roleStr === 'FREELANCER' && !isFreelancer) throw new AppError('Siz ijrochi emassiz', 403);
+  if (roleStr === 'ANY_PARTICIPANT' && !isClient && !isFreelancer) {
     throw new AppError('Ruxsat yo\'q', 403);
   }
 
@@ -402,7 +412,16 @@ async function startProgress(taskId, freelancerId) {
 async function submitPreviewDelivery(taskId, freelancerId, { previewFileIds, fullFileIds, note }) {
   const task = await taskRepository.findUnique({ where: { id: taskId } });
   if (!task) throw new AppError('Vazifa topilmadi', 404);
-  if (task.freelancerId !== freelancerId) throw new AppError('Ruxsat yo\'q', 403);
+  
+  let isFreelancer = task.freelancerId === freelancerId;
+  if (!isFreelancer && task.isCoWorking) {
+    const collab = await prisma.taskCollaborator.findUnique({
+      where: { taskId_freelancerId: { taskId, freelancerId } }
+    });
+    if (collab && collab.status === 'ACCEPTED') isFreelancer = true;
+  }
+  
+  if (!isFreelancer) throw new AppError('Ruxsat yo\'q', 403);
   
   validateTransition(task.status, TASK_STATUS.PREVIEW_PENDING);
   
@@ -489,7 +508,15 @@ async function getDeliveryFiles(taskId, userId, type = 'preview') {
   if (!task) throw new AppError('Vazifa topilmadi', 404);
   
   const isClient = task.clientId === userId;
-  const isFreelancer = task.freelancerId === userId;
+  let isFreelancer = task.freelancerId === userId;
+  
+  if (!isFreelancer && task.isCoWorking) {
+    const collab = await prisma.taskCollaborator.findUnique({
+      where: { taskId_freelancerId: { taskId, freelancerId: userId } }
+    });
+    if (collab && collab.status === 'ACCEPTED') isFreelancer = true;
+  }
+
   if (!isClient && !isFreelancer) throw new AppError('Ruxsat yo\'q', 403);
   
   const delivery = await prisma.workDelivery.findUnique({ where: { taskId } });

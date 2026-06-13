@@ -177,14 +177,32 @@ async function assembleTeam(taskId, clientId, teamMembers) {
 
   validateTransition(task.status, TASK_STATUS.ASSIGNED);
 
-  if (!teamMembers || teamMembers.length === 0) {
+  if (!Array.isArray(teamMembers) || teamMembers.length === 0) {
     throw new AppError('Jamoa a\'zolari tanlanmagan', 400);
   }
   if (teamMembers.length > task.maxCollaborators) {
     throw new AppError(`Maksimal jamoa a'zolari soni ${task.maxCollaborators} kishi`, 400);
   }
 
-  const totalShare = teamMembers.reduce((acc, curr) => acc + curr.sharePercent, 0);
+  // Fetch all valid bids for this task to verify input
+  const validBids = await bidRepository.findByTask(taskId);
+  let totalShare = 0;
+
+  for (const member of teamMembers) {
+    if (typeof member.sharePercent !== 'number' || member.sharePercent <= 0 || member.sharePercent > 100) {
+      throw new AppError("Har bir a'zoning foizi 1 dan 100 gacha raqam bo'lishi kerak", 400);
+    }
+    totalShare += member.sharePercent;
+
+    const bid = validBids.find(b => b.id === member.bidId);
+    if (!bid) {
+      throw new AppError("Noto'g'ri taklif (bid) tanlandi yoki u ushbu vazifaga tegishli emas", 400);
+    }
+    if (bid.freelancerId !== member.freelancerId) {
+      throw new AppError("Taklif egasi va ijrochi mos kelmadi", 400);
+    }
+  }
+
   if (totalShare !== 100) {
     throw new AppError('Foizlar yig\'indisi 100% ga teng bo\'lishi kerak', 400);
   }
