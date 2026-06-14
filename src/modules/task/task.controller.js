@@ -9,7 +9,7 @@ async function createTask(req, res) {
 }
 
 async function listTasks(req, res) {
-  const result = await taskService.listTasks(req.query, req.user?.userId);
+  const result = await taskService.listTasks(req.query, req.user?.id);
   res.json({ success: true, data: result });
 }
 
