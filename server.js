@@ -96,6 +96,10 @@ async function start() {
     // Initialize bot (lazy — won't crash if Telegram is unreachable)
     getBot();
 
+    // Run database migrations for legacy chat data
+    const runChatMigration = require('./src/utils/migrateChats');
+    await runChatMigration();
+
     const app = createApp();
     
     // Create HTTP Server from Express App
