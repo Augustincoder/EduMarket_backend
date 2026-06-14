@@ -8,6 +8,7 @@ const sendMessageSchema = z.object({
   fileName: z.string().optional().nullable(),
   isSecureFile: z.boolean().optional().default(false),
   replyToId: z.string().optional().nullable(),
+  clientId: z.string().optional().nullable(),
 }).refine(data => (data.content && data.content.trim().length > 0) || data.fileId, {
   message: "Xabar matni yoki fayl yuborilishi shart",
   path: ["content"]

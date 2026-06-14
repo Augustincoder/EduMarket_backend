@@ -103,7 +103,8 @@ async function getMessages(req, res) {
   const { chatRoomId } = req.params;
   const userId = req.user.id;
   const cursor = req.query.cursor || undefined;
-  const limit = req.query.limit ? parseInt(req.query.limit, 10) : 50;
+  let limit = req.query.limit ? parseInt(req.query.limit, 10) : 50;
+  if (limit > 100) limit = 100; // Prevent DB overload
 
   const result = await chatService.getMessages(chatRoomId, userId, cursor, limit);
   res.json({ success: true, data: result });
@@ -152,6 +153,13 @@ async function markAsRead(req, res) {
   res.json({ success: true, data: result });
 }
 
+async function searchGlobalMessages(req, res) {
+  const { query } = req.query;
+  const userId = req.user.id;
+  const results = await chatService.searchGlobalMessages(userId, query);
+  res.json({ success: true, data: results });
+}
+
 async function getChatRoomInfo(req, res) {
   const { chatRoomId } = req.params;
   const userId = req.user.id;
@@ -182,5 +190,6 @@ module.exports = {
   editMessage,
   deleteMessage,
   toggleReaction,
-  markAsRead
+  markAsRead,
+  searchGlobalMessages
 };

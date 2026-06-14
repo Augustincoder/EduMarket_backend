@@ -355,7 +355,7 @@ async function getMyInvites(userId) {
     where: { inviteeId: userId, status: 'PENDING' },
     include: {
       chatRoom: { select: { id: true, name: true, avatarUrl: true, type: true } },
-      inviter: { select: { id: true, fullname: true, avatarUrl: true } }
+      inviter: { select: { id: true, fullname: true, username: true, avatarUrl: true } }
     },
     orderBy: { createdAt: 'desc' }
   });
@@ -376,7 +376,7 @@ async function getChatRoomInfo(chatRoomId, userId) {
     where: { chatRoomId },
     include: {
       user: {
-        select: { id: true, fullname: true, avatarUrl: true }
+        select: { id: true, fullname: true, username: true, avatarUrl: true }
       }
     },
     orderBy: { joinedAt: 'asc' }

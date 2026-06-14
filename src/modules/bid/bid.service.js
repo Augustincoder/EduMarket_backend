@@ -5,6 +5,8 @@ const { detectSpamBids } = require('../../utils/antifraud');
 const bidRepository = require('./bid.repository');
 const taskRepository = require('../task/task.repository');
 const prisma = require('../../config/prisma'); // Keep for user queries temporarily if needed
+const chatRoomService = require('../chat/chat-room.service');
+const chatService = require('../chat/chat.service');
 
 /**
  * Place a new bid on a task
@@ -119,6 +121,13 @@ async function acceptBid(taskId, bidId, clientId) {
     
     // Notify Freelancer
     await notificationService.notifyTaskAssigned(bid.freelancerId, task.title, taskId);
+    
+    // Integration: Chat System Event
+    try {
+      const room = await chatRoomService.getOrCreateTaskRoom(clientId, taskId);
+      await chatService.sendSystemEvent(room.id, "🤝 Taklif qabul qilindi! Vazifa ijrochiga biriktirildi. Ishni boshlashingiz mumkin.");
+    } catch(e) {}
+    
     return updatedTask;
   } catch (err) {
     throw new AppError(err.message, 400);
@@ -160,6 +169,13 @@ async function acceptCounterOffer(bidId, freelancerId) {
     const updatedTask = await bidRepository.acceptCounterOfferTransaction(bid.taskId, bidId, freelancerId, bid.counterPrice);
     
     await notificationService.notifyTaskAssigned(freelancerId, bid.task.title, bid.taskId);
+    
+    // Integration: Chat System Event
+    try {
+      const room = await chatRoomService.getOrCreateTaskRoom(freelancerId, bid.taskId);
+      await chatService.sendSystemEvent(room.id, `🤝 Counter-offer qabul qilindi! Kelishilgan narx: ${bid.counterPrice} UZS. Ishni boshlashingiz mumkin.`);
+    } catch(e) {}
+
     return updatedTask;
   } catch (err) {
     throw new AppError(err.message, 400);
@@ -214,6 +230,13 @@ async function assembleTeam(taskId, clientId, teamMembers) {
     for (const member of teamMembers) {
       await notificationService.notifyTaskAssigned(member.freelancerId, task.title, taskId);
     }
+
+    // Integration: Chat System Event
+    try {
+      const room = await chatRoomService.getOrCreateTaskRoom(clientId, taskId);
+      await chatService.sendSystemEvent(room.id, `👥 Jamoa yig'ildi! ${teamMembers.length} ta ijrochi vazifaga biriktirildi. Ishni boshlashingiz mumkin.`);
+    } catch(e) {}
+
     return updatedTask;
   } catch (err) {
     throw new AppError(err.message, 400);

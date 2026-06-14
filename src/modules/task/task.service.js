@@ -5,6 +5,8 @@ const { TASK_STATUS, validateTransition } = require('./task.stateMachine');
 const { getIO, isUserOnline } = require('../../config/socket');
 const notificationService = require('../notification/notification.service');
 const logger = require('../../utils/logger');
+const chatRoomService = require('../chat/chat-room.service');
+const chatService = require('../chat/chat.service');
 
 /**
  * Creates a new task
@@ -228,7 +230,9 @@ async function promoteTask(taskId, clientId, packageType) {
  * Phase 5: Task DNA Matching Engine
  */
 async function listTasks(filters, userId) {
-  const { cursor, limit, category, status, query, minPrice, maxPrice, sort } = filters;
+  let { cursor, limit, category, status, query, minPrice, maxPrice, sort } = filters;
+  limit = parseInt(limit, 10) || 20;
+  if (limit > 50) limit = 50;
 
   // Build where clause
   const where = {
@@ -409,6 +413,25 @@ async function _changeTaskState(taskId, nextState, expectedUserId, roleStr) {
     io.to(`task_${taskId}`).emit('task_status_changed', { taskId, newStatus: nextState });
   } catch (err) {
     // socket not init
+  }
+
+  // Integrations: Send System Event to Task Chat Room
+  try {
+    const room = await chatRoomService.getOrCreateTaskRoom(expectedUserId, taskId);
+    let msg = '';
+    switch (nextState) {
+      case TASK_STATUS.IN_PROGRESS: msg = "💼 Vazifa ishi boshlandi! Omad yor bo'lsin."; break;
+      case TASK_STATUS.PREVIEW_PENDING: msg = "📦 Ish natijasi yuklandi! Mijozning ko'rib chiqishi kutilmoqda."; break;
+      case TASK_STATUS.IN_REVIEW: msg = "✅ Natija mijozga manzur keldi, to'liq fayllar tekshirilmoqda."; break;
+      case TASK_STATUS.COMPLETED: msg = "🎉 Vazifa muvaffaqiyatli yakunlandi! Hamkorlik uchun rahmat."; break;
+      case TASK_STATUS.CANCELED: msg = "❌ Vazifa bekor qilindi."; break;
+    }
+    
+    if (msg) {
+      await chatService.sendSystemEvent(room.id, msg);
+    }
+  } catch (err) {
+    logger.error(`Failed to send system event for task ${taskId}: ${err.message}`);
   }
 
   return { 

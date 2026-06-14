@@ -49,6 +49,9 @@ router.get('/:chatRoomId/info', asyncHandler(chatController.getChatRoomInfo));
  *  MESSAGING (BOSQICH 3)
  *  ========================================= */
 
+// Xabarlarni global qidirish
+router.get('/search/messages', asyncHandler(chatController.searchGlobalMessages));
+
 // Xabarlarni o'qish (limit, cursor)
 router.get('/:chatRoomId/messages', asyncHandler(chatController.getMessages));
 

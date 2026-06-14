@@ -113,6 +113,14 @@ async function start() {
       logger.info(`EduMarket backend ishga tushdi — port ${env.PORT} (${env.NODE_ENV})`);
     });
 
+    // Initialize background queue workers
+    try {
+      const { initWorkers } = require('./src/config/queue');
+      initWorkers();
+    } catch (err) {
+      logger.warn(`Queue yuklanmadi: ${err.message}`);
+    }
+
     // Start cron scheduler (loads lazily — won't crash if Prisma not ready)
     try {
       const { initScheduler } = require('./src/utils/scheduler');

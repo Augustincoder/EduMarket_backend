@@ -148,20 +148,11 @@ async function getBatchUrls(req, res) {
 /**
  * DELETE /api/v1/files/:fileId
  * Delete a file from R2.
+ * SECURITY: Disabled to prevent IDOR data destruction. 
+ * Files are soft-deleted via parent entities (Task, Chat, etc).
  */
 async function deleteFile(req, res) {
-  const fileId = decodeURIComponent(req.params.fileId || '');
-
-  if (!fileId) {
-    throw new AppError('fileId ko\'rsatilmagan', 400);
-  }
-
-  await fileService.deleteFile(fileId);
-
-  res.json({
-    success: true,
-    message: 'Fayl o\'chirildi',
-  });
+  throw new AppError('Fayllarni to\'g\'ridan-to\'g\'ri o\'chirish xavfsizlik sababli taqiqlangan.', 403);
 }
 
 

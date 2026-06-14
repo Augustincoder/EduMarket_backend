@@ -3,6 +3,8 @@ const { AppError } = require('../../middleware/errorHandler');
 const { getIO, isUserOnline, getOnlineUsersSet } = require('../../config/socket');
 const logger = require('../../utils/logger');
 const notificationService = require('../notification/notification.service');
+const { v4: uuidv4 } = require('uuid');
+const { chatQueue } = require('../../config/queue');
 
 /**
  * 3-BOSQICH: XABARLASHISH VA TIZIM VOQEALARI (MESSAGING & EVENTS)
@@ -25,50 +27,67 @@ async function checkChatAccess(chatRoomId, userId) {
 async function sendMessage(chatRoomId, senderId, data) {
   const room = await checkChatAccess(chatRoomId, senderId);
 
-  const message = await prisma.chatMessage.create({
-    data: {
-      chatRoomId,
-      senderId,
-      type: data.type || 'TEXT',
-      content: data.content,
-      fileId: data.fileId,
-      fileType: data.fileType,
-      fileName: data.fileName,
-      isSecureFile: data.isSecureFile || false,
-      replyToId: data.replyToId,
-      metadata: data.metadata || null
-    },
-    include: {
-      sender: { select: { id: true, fullname: true, avatarUrl: true } },
-      replyTo: {
-        select: { id: true, content: true, fileType: true, sender: { select: { fullname: true } } }
-      }
-    }
+  // Optimistic ID generation
+  const messageId = uuidv4();
+  const createdAt = new Date();
+
+  // Fetch sender info for socket
+  const sender = await prisma.user.findUnique({
+    where: { id: senderId },
+    select: { id: true, fullname: true, username: true, avatarUrl: true }
   });
 
-  // Socket.io
+  // Fetch replyTo if exists
+  let replyTo = null;
+  if (data.replyToId) {
+    replyTo = await prisma.chatMessage.findUnique({
+      where: { id: data.replyToId },
+      select: { id: true, content: true, fileType: true, sender: { select: { fullname: true } } }
+    });
+  }
+
+  // Construct message object
+  const message = {
+    id: messageId,
+    chatRoomId,
+    senderId,
+    type: data.type || 'TEXT',
+    content: data.content,
+    fileId: data.fileId,
+    fileType: data.fileType,
+    fileName: data.fileName,
+    isSecureFile: data.isSecureFile || false,
+    replyToId: data.replyToId,
+    clientId: data.clientId || null,
+    metadata: data.metadata || null,
+    createdAt: createdAt.toISOString(), // ISO for socket
+    sender,
+    replyTo
+  };
+
+  // 1. Emit to Socket immediately
   try {
     const io = getIO();
     io.to(`chat_${chatRoomId}`).emit('new_message', message);
-  } catch (err) {}
+  } catch (err) {
+    logger.error(`Socket emit failed: ${err.message}`);
+  }
 
-  // Offline Notification
+  // 2. Add to BullMQ for DB save and Offline Notifications
   try {
     const participants = await prisma.chatParticipant.findMany({
-      where: { chatRoomId, userId: { not: senderId } }
+      where: { chatRoomId }
     });
-
-    const senderName = message.sender?.fullname || 'Foydalanuvchi';
-
-    for (const p of participants) {
-      const isOnline = await isUserOnline(p.userId);
-      if (!isOnline) {
-        notificationService.notifyChatMessage(p.userId, senderName, room.taskId || chatRoomId)
-          .catch(err => logger.error(`Telegram Notif Failed: ${err.message}`));
-      }
-    }
+    
+    await chatQueue.add('save_message', {
+      message,
+      participants,
+      taskId: room.taskId,
+      chatRoomId,
+      senderId
+    });
   } catch (err) {
-    logger.error(`Offline notification error: ${err.message}`);
+    logger.error(`Failed to add message to Queue: ${err.message}`);
   }
 
   return message;
@@ -76,20 +95,34 @@ async function sendMessage(chatRoomId, senderId, data) {
 
 // Tizim xabari (System Event) yuborish (Bot kabi)
 async function sendSystemEvent(chatRoomId, content, metadata = null) {
-  const message = await prisma.chatMessage.create({
-    data: {
-      chatRoomId,
-      senderId: null, // Tizim xabari
-      type: 'SYSTEM_EVENT',
-      content,
-      metadata
-    }
-  });
+  const messageId = uuidv4();
+  const createdAt = new Date();
+
+  const message = {
+    id: messageId,
+    chatRoomId,
+    senderId: null, // Tizim xabari
+    type: 'SYSTEM_EVENT',
+    content,
+    metadata,
+    createdAt: createdAt.toISOString()
+  };
 
   try {
     const io = getIO();
     io.to(`chat_${chatRoomId}`).emit('new_message', message);
   } catch (err) {}
+
+  try {
+    await chatQueue.add('save_message', {
+      message,
+      participants: null, // Skip offline notifications for system events
+      chatRoomId,
+      senderId: null
+    });
+  } catch (err) {
+    logger.error(`Failed to add system event to Queue: ${err.message}`);
+  }
 
   return message;
 }
@@ -148,7 +181,7 @@ async function getMessages(chatRoomId, userId, cursor, limit = 50) {
     take: limit,
     orderBy: { id: 'desc' },
     include: {
-      sender: { select: { id: true, fullname: true, avatarUrl: true } },
+      sender: { select: { id: true, fullname: true, username: true, avatarUrl: true } },
       replyTo: {
         select: { id: true, content: true, fileType: true, sender: { select: { fullname: true } } }
       }
@@ -179,7 +212,7 @@ async function getConversations(userId) {
             take: 1
           },
           participants: {
-            include: { user: { select: { id: true, fullname: true, avatarUrl: true } } }
+            include: { user: { select: { id: true, fullname: true, username: true, avatarUrl: true } } }
           }
         }
       }
@@ -215,14 +248,20 @@ async function getConversations(userId) {
     let title = room.name;
     let avatar = room.avatarUrl;
     let otherUser = null;
+    const otherParticipant = room.participants.find(part => part.userId !== userId);
 
     if (room.type === 'DIRECT') {
-      const otherParticipant = room.participants.find(part => part.userId !== userId);
       if (otherParticipant) {
         otherUser = otherParticipant.user;
         title = otherUser.fullname;
         avatar = otherUser.avatarUrl;
         otherUser.isOnline = onlineUsers.has(otherUser.id);
+      }
+    } else if (room.type === 'TASK_ROOM') {
+      title = room.name;
+      if (otherParticipant) {
+        avatar = otherParticipant.user.avatarUrl;
+        otherUser = otherParticipant.user;
       }
     }
 
@@ -252,7 +291,7 @@ async function editMessage(messageId, userId, newContent) {
     where: { id: messageId },
     data: { content: newContent, isEdited: true, editedAt: new Date() },
     include: {
-      sender: { select: { id: true, fullname: true, avatarUrl: true } },
+      sender: { select: { id: true, fullname: true, username: true, avatarUrl: true } },
       replyTo: { select: { id: true, content: true, fileType: true, sender: { select: { fullname: true } } } }
     }
   });
@@ -354,6 +393,51 @@ async function markAsRead(chatRoomId, userId) {
   return { success: true };
 }
 
+// Global Full-Text Search (Master Level)
+async function searchGlobalMessages(userId, query) {
+  if (!query || query.trim().length < 2) return [];
+
+  // Find all rooms the user is part of
+  const participants = await prisma.chatParticipant.findMany({
+    where: { userId },
+    select: { chatRoomId: true }
+  });
+  
+  if (participants.length === 0) return [];
+  
+  const roomIds = participants.map(p => p.chatRoomId);
+
+  // Sanitize query to keep only letters, numbers and spaces
+  const cleanQuery = query.replace(/[^\p{L}\p{N}\s]/gu, '').trim();
+  if (cleanQuery.length < 2) return [];
+
+  // PostgreSQL FTS query format: "word1:* | word2:*"
+  const formattedQuery = cleanQuery.split(/\s+/).map(word => `${word}:*`).join(' | ');
+
+  const messages = await prisma.chatMessage.findMany({
+    where: {
+      chatRoomId: { in: roomIds },
+      content: {
+        search: formattedQuery
+      },
+      isDeleted: false
+    },
+    take: 50,
+    orderBy: { _relevance: { fields: ['content'], search: formattedQuery, sort: 'desc' } },
+    include: {
+      sender: { select: { id: true, fullname: true, avatarUrl: true } },
+      chatRoom: { 
+        select: { 
+          id: true, type: true, name: true, avatarUrl: true, 
+          participants: { include: { user: { select: { id: true, fullname: true, avatarUrl: true } } } } 
+        } 
+      }
+    }
+  });
+
+  return messages;
+}
+
 module.exports = {
   sendMessage,
   sendSystemEvent,
@@ -363,5 +447,6 @@ module.exports = {
   editMessage,
   deleteMessage,
   toggleReaction,
-  markAsRead
+  markAsRead,
+  searchGlobalMessages
 };
