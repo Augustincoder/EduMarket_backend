@@ -133,6 +133,12 @@ async function getTaskById(id) {
           clientAcceptedAt: true,
           fullRevealedAt: true
         }
+      },
+      reviews: {
+        select: {
+          id: true,
+          fromUserId: true
+        }
       }
     }
   });
