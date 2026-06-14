@@ -7,7 +7,7 @@ const { AppError } = require('../../middleware/errorHandler');
 async function addPortfolioItem(req, res) {
   // Expected body: { title: "My best presentation", fileId: "telegram_file_id_string" }
   const { title, fileId } = req.body;
-  const userId = req.user.userId;
+  const userId = req.user.id;
 
   if (!title || !fileId) {
     throw new AppError('Sarlavha va fayl (fileId) kiritilishi shart', 400);
@@ -27,7 +27,7 @@ async function addPortfolioItem(req, res) {
  */
 async function deletePortfolioItem(req, res) {
   const itemId = req.params.id;
-  const userId = req.user.userId;
+  const userId = req.user.id;
 
   await portfolioService.deletePortfolioItem(itemId, userId);
 

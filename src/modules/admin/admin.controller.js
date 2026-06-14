@@ -21,7 +21,7 @@ async function setUserBan(req, res) {
     throw new AppError('Bloklash sababini ko\'rsatish majburiy', 400);
   }
 
-  const user = await adminService.setUserBanStatus(req.user.userId, targetUserId, isBanned, reason);
+  const user = await adminService.setUserBanStatus(req.user.id, targetUserId, isBanned, reason);
   
   res.json({
     success: true,
@@ -51,7 +51,7 @@ async function processVipRequest(req, res) {
     throw new AppError('Rad etish sababini ko\'rsatish majburiy', 400);
   }
 
-  const result = await vipService.processVipPayment(paymentId, req.user.userId, isApproved, rejectReason);
+  const result = await vipService.processVipPayment(paymentId, req.user.id, isApproved, rejectReason);
 
   res.json({
     success: true,
@@ -98,7 +98,7 @@ async function resolveDispute(req, res) {
     throw new AppError('G\'olib ko\'rsatilishi majburiy', 400);
   }
 
-  const result = await adminService.resolveDispute(disputeId, req.user.userId, { winner, adminNotes });
+  const result = await adminService.resolveDispute(disputeId, req.user.id, { winner, adminNotes });
   
   res.json({
     success: true,
@@ -128,7 +128,7 @@ async function setUserVip(req, res) {
   const targetUserId = req.params.userId;
   const { isVip, durationDays } = req.body;
 
-  const user = await adminService.setUserVipStatus(req.user.userId, targetUserId, isVip, durationDays);
+  const user = await adminService.setUserVipStatus(req.user.id, targetUserId, isVip, durationDays);
   res.json({ success: true, message: 'Foydalanuvchi VIP statusi o\'zgartirildi', data: user });
 }
 
@@ -143,7 +143,7 @@ async function warnUser(req, res) {
     throw new AppError('Ogohlantirish xabari bo\'sh bo\'lishi mumkin emas', 400);
   }
 
-  await adminService.warnUser(req.user.userId, targetUserId, message);
+  await adminService.warnUser(req.user.id, targetUserId, message);
   res.json({ success: true, message: 'Ogohlantirish yuborildi' });
 }
 
@@ -158,7 +158,7 @@ async function verifyStudent(req, res) {
     throw new AppError('Rad etish sababini ko\'rsatish majburiy', 400);
   }
 
-  const user = await adminService.verifyStudentStatus(req.user.userId, targetUserId, isApproved, rejectReason);
+  const user = await adminService.verifyStudentStatus(req.user.id, targetUserId, isApproved, rejectReason);
   res.json({ success: true, message: isApproved ? 'Talaba arizasi tasdiqlandi' : 'Talaba arizasi rad etildi', data: user });
 }
 
@@ -197,7 +197,7 @@ async function updateSetting(req, res) {
     throw new AppError('Kalit va qiymat majburiy', 400);
   }
 
-  const setting = await adminService.updateSetting(req.user.userId, key, value);
+  const setting = await adminService.updateSetting(req.user.id, key, value);
   res.json({ success: true, message: 'Sozlama saqlandi', data: setting });
 }
 
@@ -219,7 +219,7 @@ async function broadcastMessage(req, res) {
     throw new AppError('Guruh va matn majburiy', 400);
   }
 
-  const result = await adminService.broadcastMessage(req.user.userId, targetType, text);
+  const result = await adminService.broadcastMessage(req.user.id, targetType, text);
   res.json({ success: true, message: `Xabar yuborish boshlandi. Jami: ${result.sentCount} ta foydalanuvchi` });
 }
 
@@ -228,7 +228,7 @@ async function broadcastMessage(req, res) {
  */
 async function deleteTask(req, res) {
   const taskId = req.params.taskId;
-  await adminService.deleteTask(req.user.userId, taskId);
+  await adminService.deleteTask(req.user.id, taskId);
   res.json({ success: true, message: 'Vazifa o\'chirildi/bekor qilindi' });
 }
 
@@ -237,7 +237,7 @@ async function deleteTask(req, res) {
  */
 async function deleteGig(req, res) {
   const gigId = req.params.gigId;
-  await adminService.deleteGig(req.user.userId, gigId);
+  await adminService.deleteGig(req.user.id, gigId);
   res.json({ success: true, message: 'Xizmat (gig) o\'chirildi' });
 }
 

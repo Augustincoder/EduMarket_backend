@@ -5,7 +5,7 @@ const { AppError } = require('../../middleware/errorHandler');
  * Create a new Gig
  */
 async function createGig(req, res) {
-  const userId = req.user.userId;
+  const userId = req.user.id;
   const { title, description, price, deliveryDays } = req.body;
 
   if (!title || !description || !price || !deliveryDays) {
@@ -38,7 +38,7 @@ async function listGigs(req, res) {
  */
 async function orderGig(req, res) {
   const gigId = req.params.id;
-  const clientId = req.user.userId;
+  const clientId = req.user.id;
 
   const task = await gigService.orderGig(gigId, clientId);
 
@@ -54,7 +54,7 @@ async function orderGig(req, res) {
  */
 async function toggleStatus(req, res) {
   const gigId = req.params.id;
-  const userId = req.user.userId;
+  const userId = req.user.id;
 
   const gig = await gigService.toggleGigStatus(gigId, userId);
 

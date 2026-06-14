@@ -59,7 +59,7 @@ async function me(req, res) {
   res.json({
     success: true,
     data: {
-      userId: req.user.userId,
+      userId: req.user.id,
       role: req.user.role
     }
   });

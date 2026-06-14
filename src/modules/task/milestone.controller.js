@@ -16,7 +16,7 @@ async function getMilestones(req, res) {
 async function createMilestone(req, res) {
   const taskId = req.params.id;
   const { title } = req.body;
-  const userId = req.user.userId;
+  const userId = req.user.id;
 
   // Verify task membership
   const task = await taskRepository.findUnique({ where: { id: taskId }, include: { collaborators: true } });
@@ -52,7 +52,7 @@ async function toggleMilestone(req, res) {
   const taskId = req.params.id;
   const milestoneId = req.params.milestoneId;
   const { isCompleted } = req.body;
-  const userId = req.user.userId;
+  const userId = req.user.id;
 
   const task = await taskRepository.findUnique({ where: { id: taskId }, include: { collaborators: true } });
   if (!task) throw new AppError('Vazifa topilmadi', 404);
@@ -79,7 +79,7 @@ async function toggleMilestone(req, res) {
 async function deleteMilestone(req, res) {
   const taskId = req.params.id;
   const milestoneId = req.params.milestoneId;
-  const userId = req.user.userId;
+  const userId = req.user.id;
 
   const task = await taskRepository.findUnique({ where: { id: taskId }, include: { collaborators: true } });
   if (!task) throw new AppError('Vazifa topilmadi', 404);

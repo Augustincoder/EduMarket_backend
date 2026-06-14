@@ -5,7 +5,7 @@ const bidService = require('./bid.service');
  */
 async function placeBid(req, res) {
   const taskId = req.params.id;
-  const freelancerId = req.user.userId;
+  const freelancerId = req.user.id;
   
   const bid = await bidService.createBid(taskId, freelancerId, req.body);
   
@@ -22,7 +22,7 @@ async function placeBid(req, res) {
 async function acceptBid(req, res) {
   const taskId = req.params.id;
   const bidId = req.params.bidId;
-  const clientId = req.user.userId;
+  const clientId = req.user.id;
   
   const task = await bidService.acceptBid(taskId, bidId, clientId);
   
@@ -38,7 +38,7 @@ async function acceptBid(req, res) {
  */
 async function createCounterOffer(req, res) {
   const bidId = req.params.bidId;
-  const clientId = req.user.userId;
+  const clientId = req.user.id;
   
   const bid = await bidService.createCounterOffer(bidId, clientId, req.body);
   
@@ -54,7 +54,7 @@ async function createCounterOffer(req, res) {
  */
 async function acceptCounterOffer(req, res) {
   const bidId = req.params.bidId;
-  const freelancerId = req.user.userId;
+  const freelancerId = req.user.id;
   
   const bid = await bidService.acceptCounterOffer(bidId, freelancerId);
   
@@ -70,7 +70,7 @@ async function acceptCounterOffer(req, res) {
  */
 async function getTaskBids(req, res) {
   const taskId = req.params.id;
-  const clientId = req.user.userId;
+  const clientId = req.user.id;
 
   const bids = await bidService.getTaskBids(taskId, clientId);
 
@@ -85,7 +85,7 @@ async function getTaskBids(req, res) {
  */
 async function assembleTeam(req, res) {
   const taskId = req.params.id;
-  const clientId = req.user.userId;
+  const clientId = req.user.id;
   const teamMembers = req.body.teamMembers; // array of { bidId, freelancerId, sharePercent }
 
   const task = await bidService.assembleTeam(taskId, clientId, teamMembers);

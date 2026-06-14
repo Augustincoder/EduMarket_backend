@@ -34,7 +34,7 @@ const requireAuth = asyncHandler(async (req, res, next) => {
     }
 
     // Ensure user still exists and is not banned
-    const userIdStr = String(decoded.userId);
+    const userIdStr = String(decoded.userId || decoded.id);
     let user = await prisma.user.findUnique({
       where: { id: userIdStr },
       select: { id: true, role: true, isBanned: true, isVip: true, vipExpiresAt: true }
@@ -56,7 +56,8 @@ const requireAuth = asyncHandler(async (req, res, next) => {
     }
 
     // Attach user payload to request with stringified ID
-    req.user = { ...decoded, userId: userIdStr, isVip: user.isVip, vipExpiresAt: user.vipExpiresAt };
+    // Provide both .id and .userId to ensure strict standard compliance while avoiding immediate breakages
+    req.user = { ...decoded, id: userIdStr, userId: userIdStr, isVip: user.isVip, vipExpiresAt: user.vipExpiresAt };
     
     // Attach the actual token to req.token so we can blacklist it on logout
     req.token = token;
@@ -82,7 +83,8 @@ const optionalAuth = asyncHandler(async (req, res, next) => {
     const decoded = verifyToken(token);
     const isBlacklisted = await isTokenBlacklisted(token);
     if (!isBlacklisted) {
-      req.user = { ...decoded, userId: String(decoded.userId) };
+      const userIdStr = String(decoded.userId || decoded.id);
+      req.user = { ...decoded, id: userIdStr, userId: userIdStr };
     }
   } catch (err) {
     // Ignore error if token is invalid, just proceed as unauthenticated

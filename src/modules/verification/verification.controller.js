@@ -5,7 +5,7 @@ const { asyncHandler } = require('../../middleware/errorHandler');
  * Submit verification
  */
 const submit = asyncHandler(async (req, res) => {
-  const result = await verificationService.submitRequest(req.user.userId, req.body);
+  const result = await verificationService.submitRequest(req.user.id, req.body);
   res.json({ success: true, data: result });
 });
 
@@ -13,7 +13,7 @@ const submit = asyncHandler(async (req, res) => {
  * Get my status
  */
 const getMyStatus = asyncHandler(async (req, res) => {
-  const result = await verificationService.getMyRequest(req.user.userId);
+  const result = await verificationService.getMyRequest(req.user.id);
   res.json({ success: true, data: result });
 });
 
@@ -31,7 +31,7 @@ const adminList = asyncHandler(async (req, res) => {
  */
 const adminResolve = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const result = await verificationService.resolveRequest(id, req.user.userId, req.body);
+  const result = await verificationService.resolveRequest(id, req.user.id, req.body);
   res.json({ success: true, data: result });
 });
 

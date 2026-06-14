@@ -16,7 +16,7 @@ function getPackages(req, res) {
  * Submit VIP payment receipt
  */
 async function submitPayment(req, res) {
-  const userId = req.user.userId;
+  const userId = req.user.id;
   
   const payment = await vipService.createVipRequest(userId, req.body);
   
@@ -31,7 +31,7 @@ async function submitPayment(req, res) {
  * Get user's VIP status
  */
 async function getStatus(req, res) {
-  const userId = req.user.userId;
+  const userId = req.user.id;
   const status = await vipService.getVipStatus(userId);
   
   res.json({

@@ -5,7 +5,7 @@ const reviewService = require('./review.service');
  */
 async function createReview(req, res) {
   const taskId = req.params.taskId;
-  const fromUserId = req.user.userId;
+  const fromUserId = req.user.id;
   
   const review = await reviewService.createReview(taskId, fromUserId, req.body);
   
@@ -39,7 +39,7 @@ async function getUserReviews(req, res) {
  * Get tasks where user needs to leave a review
  */
 async function getPendingReviews(req, res) {
-  const tasks = await reviewService.getPendingReviews(req.user.userId);
+  const tasks = await reviewService.getPendingReviews(req.user.id);
   
   res.json({
     success: true,

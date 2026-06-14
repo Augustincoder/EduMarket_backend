@@ -173,7 +173,7 @@ async function getSecureToken(req, res) {
   const fileId = decodeURIComponent(req.params.fileId || '');
   if (!fileId) throw new AppError('fileId ko\'rsatilmagan', 400);
 
-  const token = await fileService.getSecureToken(fileId, req.user.userId);
+  const token = await fileService.getSecureToken(fileId, req.user.id);
 
   res.json({
     success: true,

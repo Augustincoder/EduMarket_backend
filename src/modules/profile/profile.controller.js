@@ -4,7 +4,7 @@ const profileService = require('./profile.service');
  * Get current user profile
  */
 async function getMyProfile(req, res) {
-  const profile = await profileService.getProfile(req.user.userId);
+  const profile = await profileService.getProfile(req.user.id);
   res.json({ success: true, data: profile });
 }
 
@@ -12,7 +12,7 @@ async function getMyProfile(req, res) {
  * Update current user profile
  */
 async function updateMyProfile(req, res) {
-  const updatedProfile = await profileService.updateProfile(req.user.userId, req.body);
+  const updatedProfile = await profileService.updateProfile(req.user.id, req.body);
   res.json({
     success: true,
     message: 'Profil muvaffaqiyatli yangilandi',
@@ -46,7 +46,7 @@ async function getLeaderboard(req, res) {
  * Get referrals
  */
 async function getMyReferrals(req, res) {
-  const referrals = await profileService.getReferrals(req.user.userId);
+  const referrals = await profileService.getReferrals(req.user.id);
   res.json({
     success: true,
     data: referrals
@@ -58,7 +58,7 @@ async function getMyReferrals(req, res) {
  */
 async function updatePushToken(req, res) {
   const { token } = req.body;
-  await profileService.updatePushToken(req.user.userId, token);
+  await profileService.updatePushToken(req.user.id, token);
   res.json({ success: true, message: 'Push token yangilandi' });
 }
 
@@ -66,7 +66,7 @@ async function updatePushToken(req, res) {
  * Delete current user profile (GDPR)
  */
 async function deleteMyProfile(req, res) {
-  await profileService.deleteProfile(req.user.userId);
+  await profileService.deleteProfile(req.user.id);
   res.json({
     success: true,
     message: 'Profilingiz muvaffaqiyatli o\'chirildi'
@@ -79,7 +79,7 @@ const reputationService = require('./reputation.service');
  * Get user's Reputation DNA
  */
 async function getUserReputationDNA(req, res) {
-  const userId = req.params.userId || req.user.userId;
+  const userId = req.params.userId || req.user.id;
   const dna = await reputationService.getReputationDNA(userId);
   res.json({ success: true, data: dna });
 }
@@ -88,7 +88,7 @@ async function getUserReputationDNA(req, res) {
  * Recalculate Reputation DNA
  */
 async function recalculateMyReputationDNA(req, res) {
-  const dna = await reputationService.recalculateReputationDNA(req.user.userId);
+  const dna = await reputationService.recalculateReputationDNA(req.user.id);
   res.json({ success: true, data: dna });
 }
 
