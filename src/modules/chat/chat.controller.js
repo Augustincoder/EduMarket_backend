@@ -12,6 +12,13 @@ async function getOrCreateDirectChat(req, res) {
   res.json({ success: true, data: room });
 }
 
+async function getOrCreateTaskRoom(req, res) {
+  const { taskId } = req.params;
+  const userId = req.user.userId || req.user.id;
+  const room = await chatRoomService.getOrCreateTaskRoom(userId, taskId);
+  res.json({ success: true, data: room });
+}
+
 async function createCustomGroup(req, res) {
   const { name, avatarUrl } = req.body;
   const userId = req.user.userId || req.user.id;
@@ -155,6 +162,7 @@ async function getChatRoomInfo(req, res) {
 module.exports = {
   // Room
   getOrCreateDirectChat,
+  getOrCreateTaskRoom,
   createCustomGroup,
   updateGroupSettings,
   removeParticipant,

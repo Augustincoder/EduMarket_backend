@@ -191,13 +191,13 @@ async function getConversations(userId) {
 
   // 2. Fetch all unread counts in ONE single raw query (Fixing N+1 issue)
   const unreadCountsRaw = await prisma.$queryRaw`
-    SELECT m."chatRoomId", COUNT(m.id)::int as "unreadCount"
-    FROM "ChatMessage" m
-    INNER JOIN "ChatParticipant" p ON m."chatRoomId" = p."chatRoomId"
-    WHERE p."userId" = ${userId}
-      AND m."senderId" IS DISTINCT FROM ${userId}
-      AND (p."lastReadAt" IS NULL OR m."createdAt" > p."lastReadAt")
-    GROUP BY m."chatRoomId"
+    SELECT m."chat_room_id" as "chatRoomId", COUNT(m.id)::int as "unreadCount"
+    FROM "chat_messages" m
+    INNER JOIN "chat_participants" p ON m."chat_room_id" = p."chat_room_id"
+    WHERE p."user_id" = ${userId}
+      AND m."sender_id" IS DISTINCT FROM ${userId}
+      AND (p."last_read_at" IS NULL OR m."created_at" > p."last_read_at")
+    GROUP BY m."chat_room_id"
   `;
 
   // Map counts to an object for O(1) lookup

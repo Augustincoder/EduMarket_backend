@@ -27,6 +27,9 @@ router.post('/group', validate(createGroupSchema, 'body'), asyncHandler(chatCont
 // Direct chat ochish yoki olish
 router.post('/direct', asyncHandler(chatController.getOrCreateDirectChat));
 
+// Task uchun chat xonasini olish yoki yaratish
+router.get('/task/:taskId', asyncHandler(chatController.getOrCreateTaskRoom));
+
 // Takliflar bo'limi
 router.get('/invites', asyncHandler(chatController.getMyInvites));
 router.post('/invites/:inviteId/accept', asyncHandler(chatController.acceptInvite));

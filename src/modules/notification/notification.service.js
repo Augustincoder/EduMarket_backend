@@ -121,18 +121,18 @@ async function notifyTaskAssigned(freelancerId, taskTitle, taskId) {
   }
 }
 
-async function notifyChatMessage(recipientId, senderName, taskId) {
+async function notifyChatMessage(recipientId, senderName, chatRoomId) {
   const title = "💬 Yangi xabar";
-  const text = `<b>${senderName}</b> vazifa bo'yicha sizga xabar yubordi.`;
+  const text = `<b>${senderName}</b> sizga xabar yubordi.`;
 
-  await createDbNotification(recipientId, 'chat_message', title, text.replace(/<[^>]*>?/gm, ''), `/tasks/${taskId}/chat`);
+  await createDbNotification(recipientId, 'chat_message', title, text.replace(/<[^>]*>?/gm, ''), `/chat/${chatRoomId}`);
 
   const { shouldSend, pushToken } = await shouldSendNotification(recipientId, 'chatMessage');
   if (!shouldSend) return;
 
   const recipient = await prisma.user.findUnique({ where: { id: recipientId }, select: { telegramId: true } });
   if (!recipient) return;
-  const keyboard = [[{ text: "Chatni ochish", web_app: { url: `https://t.me/${env.BOT_USERNAME}/app?startapp=chat_${taskId}` } }]];
+  const keyboard = [[{ text: "Chatni ochish", web_app: { url: `https://t.me/${env.BOT_USERNAME}/app?startapp=chat_${chatRoomId}` } }]];
 
   await sendTelegramMessage(recipient.telegramId.toString(), text, keyboard);
 

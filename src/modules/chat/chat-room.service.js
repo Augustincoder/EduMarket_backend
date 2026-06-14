@@ -40,6 +40,75 @@ async function getOrCreateDirectChat(userId1, userId2) {
   return newRoom;
 }
 
+// Task uchun chat xonasini olish yoki yaratish
+async function getOrCreateTaskRoom(userId, taskId) {
+  // Avval Task ni tekshiramiz va a'zolarni aniqlaymiz
+  const task = await prisma.task.findUnique({
+    where: { id: taskId },
+    include: { collaborators: true }
+  });
+
+  if (!task) throw new AppError('Topshiriq topilmadi', 404);
+
+  // Bu foydalanuvchi task'ga aloqadormi?
+  const isClient = task.clientId === userId;
+  const isFreelancer = task.freelancerId === userId;
+  const isCollaborator = task.collaborators.some(c => c.freelancerId === userId);
+
+  if (!isClient && !isFreelancer && !isCollaborator) {
+    throw new AppError('Siz ushbu topshiriqning ishtirokchisi emassiz', 403);
+  }
+
+  // Avval ushbu taskId uchun xona borligini tekshiramiz
+  const existingRoom = await prisma.chatRoom.findFirst({
+    where: { taskId },
+    include: { participants: true }
+  });
+
+  if (existingRoom) {
+    // Agar foydalanuvchi hali qo'shilmagan bo'lsa, qo'shib qo'yamiz
+    const isParticipant = existingRoom.participants.some(p => p.userId === userId);
+    if (!isParticipant) {
+      await prisma.chatParticipant.create({
+        data: {
+          chatRoomId: existingRoom.id,
+          userId,
+          role: userId === task.clientId ? 'OWNER' : 'MEMBER'
+        }
+      });
+    }
+    return existingRoom;
+  }
+
+  // Agar room yo'q bo'lsa, uni yaratamiz
+  if (!task.freelancerId) {
+    throw new AppError('Topshiriq uchun hali ijrochi tanlanmagan', 400);
+  }
+
+  const participantsData = [
+    { userId: task.clientId, role: 'OWNER' },
+    { userId: task.freelancerId, role: 'MEMBER' }
+  ];
+
+  task.collaborators.forEach(c => {
+    participantsData.push({ userId: c.freelancerId, role: 'MEMBER' });
+  });
+
+  const newRoom = await prisma.chatRoom.create({
+    data: {
+      type: 'TASK_ROOM',
+      name: task.title,
+      taskId: task.id,
+      participants: {
+        create: participantsData
+      }
+    },
+    include: { participants: true }
+  });
+
+  return newRoom;
+}
+
 // Yangi ixtiyoriy guruh yaratish (CUSTOM_GROUP)
 async function createCustomGroup(creatorId, name, avatarUrl) {
   if (!name) throw new AppError('Guruh nomi majburiy', 400);
@@ -347,6 +416,7 @@ async function getChatRoomInfo(chatRoomId, userId) {
 
 module.exports = {
   getOrCreateDirectChat,
+  getOrCreateTaskRoom,
   createCustomGroup,
   updateGroupSettings,
   removeParticipant,
