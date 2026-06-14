@@ -43,9 +43,6 @@ async function loginWithTelegram(initData, ipAddress, referralCode = null) {
     }
   }
 
-  // 5. Generate a unique referral code for the user
-  const ownReferralCode = require('crypto').randomBytes(4).toString('hex');
-
   // 6. Find or Create user (Replaced upsert with find/create to avoid Postgres 22P03 binary format error)
   let user = await prisma.user.findUnique({
     where: { telegramId: tgId }
@@ -91,6 +88,7 @@ async function loginWithTelegram(initData, ipAddress, referralCode = null) {
         username,
         fullname,
         role, // Update role in case they were added to admins in .env
+        referralCode: user.referralCode || require('crypto').randomBytes(4).toString('hex'),
         lastIpAddress: ipAddress,
         lastLoginDate: now,
         streakCount: newStreak,
@@ -98,6 +96,7 @@ async function loginWithTelegram(initData, ipAddress, referralCode = null) {
       }
     });
   } else {
+    const ownReferralCode = require('crypto').randomBytes(4).toString('hex');
     user = await prisma.user.create({
       data: {
         telegramId: tgId,

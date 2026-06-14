@@ -366,6 +366,36 @@ async function listTasks(filters, userId) {
   };
 }
 
+async function _triggerTaskSideEffects(taskId, nextState, userId) {
+  try {
+    const io = getIO();
+    io.to(`task_${taskId}`).emit('task_status_changed', { taskId, newStatus: nextState });
+  } catch (err) {}
+
+  try {
+    const room = await chatRoomService.getOrCreateTaskRoom(userId, taskId);
+    let msg = '';
+    switch (nextState) {
+      case TASK_STATUS.IN_PROGRESS: msg = "💼 Vazifa ishi boshlandi! Omad yor bo'lsin."; break;
+      case TASK_STATUS.PREVIEW_PENDING: msg = "📦 Ish natijasi yuklandi! Mijozning ko'rib chiqishi kutilmoqda."; break;
+      case TASK_STATUS.IN_REVIEW: msg = "✅ Natija mijozga manzur keldi, to'liq fayllar tekshirilmoqda."; break;
+      case TASK_STATUS.COMPLETED: msg = "🎉 Vazifa muvaffaqiyatli yakunlandi! Hamkorlik uchun rahmat."; break;
+      case TASK_STATUS.CANCELED: msg = "❌ Vazifa bekor qilindi."; break;
+      case TASK_STATUS.DISPUTED: msg = "⚖️ Nizo (dispute) ochildi. Admin ko'rib chiqishi kutilmoqda."; break;
+    }
+    
+    if (msg) {
+      await chatService.sendSystemEvent(room.id, msg);
+    }
+
+    if (nextState === TASK_STATUS.COMPLETED || nextState === TASK_STATUS.CANCELED) {
+      await taskChatSyncService.archiveTaskRoom(taskId);
+    }
+  } catch (err) {
+    logger.error(`Side effects failed for task ${taskId}: ${err.message}`);
+  }
+}
+
 /**
  * Internal helper to update state with validation
  */
@@ -415,35 +445,7 @@ async function _changeTaskState(taskId, nextState, expectedUserId, roleStr) {
 
   const updatedTask = await taskRepository.findUnique({ where: { id: taskId }, include: { client: true, freelancer: true } });
 
-  try {
-    const io = getIO();
-    io.to(`task_${taskId}`).emit('task_status_changed', { taskId, newStatus: nextState });
-  } catch (err) {
-    // socket not init
-  }
-
-  // Integrations: Send System Event to Task Chat Room
-  try {
-    const room = await chatRoomService.getOrCreateTaskRoom(expectedUserId, taskId);
-    let msg = '';
-    switch (nextState) {
-      case TASK_STATUS.IN_PROGRESS: msg = "💼 Vazifa ishi boshlandi! Omad yor bo'lsin."; break;
-      case TASK_STATUS.PREVIEW_PENDING: msg = "📦 Ish natijasi yuklandi! Mijozning ko'rib chiqishi kutilmoqda."; break;
-      case TASK_STATUS.IN_REVIEW: msg = "✅ Natija mijozga manzur keldi, to'liq fayllar tekshirilmoqda."; break;
-      case TASK_STATUS.COMPLETED: msg = "🎉 Vazifa muvaffaqiyatli yakunlandi! Hamkorlik uchun rahmat."; break;
-      case TASK_STATUS.CANCELED: msg = "❌ Vazifa bekor qilindi."; break;
-    }
-    
-    if (msg) {
-      await chatService.sendSystemEvent(room.id, msg);
-    }
-
-    if (nextState === TASK_STATUS.COMPLETED || nextState === TASK_STATUS.CANCELED) {
-      await taskChatSyncService.archiveTaskRoom(taskId);
-    }
-  } catch (err) {
-    logger.error(`Failed to send system event or archive room for task ${taskId}: ${err.message}`);
-  }
+  await _triggerTaskSideEffects(taskId, nextState, expectedUserId);
 
   return { 
     updatedTask, 
@@ -500,6 +502,8 @@ async function submitPreviewDelivery(taskId, freelancerId, { previewFileIds, ful
       include: { client: true, freelancer: true, delivery: true }
     });
 
+    await _triggerTaskSideEffects(taskId, TASK_STATUS.PREVIEW_PENDING, freelancerId);
+
     return updatedTask;
   });
 }
@@ -525,6 +529,8 @@ async function approvePreview(taskId, clientId) {
       data: { status: TASK_STATUS.IN_REVIEW, inReviewAt: new Date() },
       include: { client: true, freelancer: true, delivery: true }
     });
+
+    await _triggerTaskSideEffects(taskId, TASK_STATUS.IN_REVIEW, clientId);
 
     return updatedTask;
   });
@@ -740,6 +746,8 @@ async function openDispute(taskId, userId, reason, description, evidenceFileIds)
       data: { status: TASK_STATUS.DISPUTED },
       include: { client: true, freelancer: true }
     });
+
+    await _triggerTaskSideEffects(taskId, TASK_STATUS.DISPUTED, userId);
 
     await notificationService.disputeOpened(updatedTask, dispute);
     return { updatedTask, dispute };

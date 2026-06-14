@@ -265,6 +265,7 @@ async function getConversations(userId) {
       chatRoom: {
         include: {
           messages: {
+            where: { isDeleted: false },
             orderBy: { createdAt: 'desc' },
             take: 1
           },

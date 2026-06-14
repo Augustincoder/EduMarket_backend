@@ -110,6 +110,10 @@ async function acceptBid(taskId, bidId, clientId) {
   if (!task) throw new AppError('Vazifa topilmadi', 404);
   if (task.clientId !== clientId) throw new AppError('Ruxsat yo\'q', 403);
   
+  if (task.isCoWorking) {
+    throw new AppError('Jamoaviy vazifa uchun jamoa yig\'ish (assembleTeam) ishlatilishi kerak', 400);
+  }
+
   validateTransition(task.status, TASK_STATUS.ASSIGNED);
 
   const bid = await bidRepository.findById(bidId);
