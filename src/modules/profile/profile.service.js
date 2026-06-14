@@ -100,7 +100,7 @@ async function getReferrals(userId) {
 
   // Fetch referred users manually since relation doesn't exist in schema
   const referredUsers = await prisma.user.findMany({
-    where: { referredBy: user.referralCode },
+    where: { referredBy: userId },
     select: {
       id: true,
       fullname: true,

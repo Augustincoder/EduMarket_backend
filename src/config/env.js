@@ -17,6 +17,8 @@ const REQUIRED = [
   'R2_ACCESS_KEY_ID',
   'R2_SECRET_ACCESS_KEY',
   'R2_BUCKET_NAME',
+  'BOT_USERNAME',
+  'REDIS_URL',
 ];
 
 const missing = REQUIRED.filter((key) => !process.env[key]);
@@ -41,8 +43,10 @@ const env = {
   NODE_ENV: process.env.NODE_ENV || 'development',
 
   DATABASE_URL: process.env.DATABASE_URL,
+  REDIS_URL: process.env.REDIS_URL || 'redis://localhost:6379',
 
   BOT_TOKEN: process.env.BOT_TOKEN,
+  BOT_USERNAME: process.env.BOT_USERNAME,
   // BOT_STORAGE_CHANNEL_ID no longer required (replaced by R2)
   BOT_STORAGE_CHANNEL_ID: process.env.BOT_STORAGE_CHANNEL_ID || null,
   TELEGRAM_WEBHOOK_SECRET: process.env.TELEGRAM_WEBHOOK_SECRET || null,

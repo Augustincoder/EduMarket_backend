@@ -2,6 +2,8 @@ const prisma = require('../../config/prisma');
 const { AppError } = require('../../middleware/errorHandler');
 const notificationService = require('../notification/notification.service');
 const { TASK_STATUS } = require('../task/task.stateMachine');
+const { getIO } = require('../../config/socket');
+const logger = require('../../utils/logger');
 const createDOMPurify = require('dompurify');
 const { JSDOM } = require('jsdom');
 
@@ -98,6 +100,17 @@ async function setUserBanStatus(adminId, targetUserId, isBanned, reason) {
     }
   });
 
+  if (isBanned) {
+    try {
+      const io = getIO();
+      // Disconnect all active sockets for this user
+      io.to(`user_${targetUserId}`).disconnectSockets(true);
+      logger.info(`Banned user ${targetUserId} disconnected from all sockets.`);
+    } catch (err) {
+      // socket io might not be initialized in some contexts (e.g. scripts)
+    }
+  }
+
   await logAction(adminId, isBanned ? 'BAN_USER' : 'UNBAN_USER', { userId: targetUserId, reason });
 
   return user;
@@ -177,15 +190,19 @@ async function getOpenDisputes(limit = 50, cursor = null) {
     orderBy: { createdAt: 'asc' }
   });
 
-  // Manually attach openedBy
-  for (const dispute of disputes) {
-    if (dispute.openedByUserId) {
-      dispute.openedBy = await prisma.user.findUnique({
-        where: { id: dispute.openedByUserId },
-        select: { id: true, fullname: true, username: true }
-      });
+  // Batch fetch users to avoid N+1
+  const openerIds = [...new Set(disputes.map(d => d.openedByUserId).filter(Boolean))];
+  const users = await prisma.user.findMany({
+    where: { id: { in: openerIds } },
+    select: { id: true, fullname: true, username: true }
+  });
+  const userMap = users.reduce((acc, u) => ({ ...acc, [u.id]: u }), {});
+
+  disputes.forEach(d => {
+    if (d.openedByUserId) {
+      d.openedBy = userMap[d.openedByUserId];
     }
-  }
+  });
 
   let nextCursor = null;
   if (disputes.length > limit) {
@@ -352,8 +369,11 @@ async function getDisputeChat(disputeId) {
   });
   if (!dispute) throw new AppError('Nizo topilmadi', 404);
 
+  const room = await prisma.chatRoom.findFirst({ where: { taskId: dispute.taskId } });
+  if (!room) return [];
+
   return prisma.chatMessage.findMany({
-    where: { taskId: dispute.taskId },
+    where: { chatRoomId: room.id },
     include: {
       sender: { select: { id: true, fullname: true, username: true } }
     },

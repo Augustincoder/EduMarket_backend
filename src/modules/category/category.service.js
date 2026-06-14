@@ -88,6 +88,18 @@ exports.updateCategory = async (id, data) => {
 };
 
 exports.deleteCategory = async (id) => {
+  const category = await prisma.category.findUnique({ where: { id } });
+  if (!category) return;
+
+  const [taskCount, gigCount] = await Promise.all([
+    prisma.task.count({ where: { category: category.value } }),
+    prisma.gig.count({ where: { category: category.value } })
+  ]);
+
+  if (taskCount > 0 || gigCount > 0) {
+    throw new Error(`Kategoriyani o'chirib bo'lmaydi: ${taskCount} ta vazifa va ${gigCount} ta xizmat ushbu kategoriyaga biriktirilgan. Buning o'rniga kategoriyani faolsizlantiring (Soft-disable).`);
+  }
+
   await prisma.category.delete({ where: { id } });
   clearCache();
 };

@@ -41,7 +41,11 @@ router.post('/:chatRoomId/invite', validate(inviteUserSchema, 'body'), asyncHand
 
 // Guruh sozlamalari
 router.put('/:chatRoomId/settings', validate(updateGroupSchema, 'body'), asyncHandler(chatController.updateGroupSettings));
+router.patch('/:chatRoomId/advanced-settings', asyncHandler(chatController.updateAdvancedGroupSettings));
 router.delete('/:chatRoomId/participants/:targetUserId', asyncHandler(chatController.removeParticipant));
+router.patch('/:chatRoomId/participants/:targetUserId/role', asyncHandler(chatController.updateParticipantRole));
+router.post('/:chatRoomId/participants/:targetUserId/mute', asyncHandler(chatController.muteParticipant));
+router.post('/:chatRoomId/participants/:targetUserId/ban', asyncHandler(chatController.banUserFromRoom));
 router.post('/:chatRoomId/leave', asyncHandler(chatController.leaveGroup));
 router.get('/:chatRoomId/info', asyncHandler(chatController.getChatRoomInfo));
 

@@ -7,7 +7,18 @@ const connection = new Redis(env.REDIS_URL, {
   maxRetriesPerRequest: null,
 });
 
-const chatQueue = new Queue('chat_messages', { connection });
+const chatQueue = new Queue('chat_messages', { 
+  connection,
+  defaultJobOptions: {
+    attempts: 5,
+    backoff: {
+      type: 'exponential',
+      delay: 2000,
+    },
+    removeOnComplete: true,
+    removeOnFail: false
+  }
+});
 
 async function initWorkers() {
   const prisma = require('./prisma');
@@ -15,57 +26,34 @@ async function initWorkers() {
   const { isUserOnline } = require('./socket');
 
   const worker = new Worker('chat_messages', async job => {
-    if (job.name === 'save_message') {
-      const { message, participants, taskId, chatRoomId, senderId } = job.data;
+    if (job.name === 'process_message_side_effects') {
+      const { participants, chatRoomId, senderId, senderName } = job.data;
       
-      // 1. Save message to DB
-      try {
-        await prisma.chatMessage.create({
-          data: {
-            id: message.id, // Pre-generated UUID
-            chatRoomId: message.chatRoomId,
-            senderId: message.senderId,
-            type: message.type,
-            content: message.content,
-            fileId: message.fileId,
-            fileType: message.fileType,
-            fileName: message.fileName,
-            isSecureFile: message.isSecureFile,
-            replyToId: message.replyToId,
-            metadata: message.metadata,
-            createdAt: message.createdAt
-          }
-        });
-      } catch (err) {
-        if (err.code === 'P2002') {
-          logger.info(`Message ${message.id} already exists in DB, skipping...`);
-        } else {
-          logger.error(`Failed to save message to DB in worker: ${err.message}`);
-          throw err; // retry
-        }
-      }
+      if (!participants || !Array.isArray(participants)) return;
 
-      // 2. Offline Notifications
-      if (!participants) return;
+      // Filter offline participants to notify
+      const offlineRecipientIds = [];
       
-      const senderName = message.sender?.fullname || 'Foydalanuvchi';
-
       for (const p of participants) {
         if (p.userId === senderId) continue;
         
         try {
           const isOnline = await isUserOnline(p.userId);
           if (!isOnline) {
-            await notificationService.notifyChatMessage(p.userId, senderName, taskId || chatRoomId);
+            offlineRecipientIds.push(p.userId);
           }
         } catch (err) {
-          logger.error(`Offline notification error in worker for user ${p.userId}: ${err.message}`);
+          logger.error(`Error checking online status for user ${p.userId}: ${err.message}`);
         }
+      }
+
+      if (offlineRecipientIds.length > 0) {
+        await notificationService.notifyChatMessageBulk(offlineRecipientIds, senderName, chatRoomId);
       }
     }
   }, { 
     connection,
-    concurrency: 5 // Process 5 messages simultaneously
+    concurrency: 5 // Process 5 jobs simultaneously
   });
 
   worker.on('completed', job => {

@@ -121,8 +121,7 @@ function initSocket(httpServer) {
   // Attach Redis adapter for cluster/multi-instance scale if connected
   if (pubClient.isOpen && subClient.isOpen) {
     io.adapter(createAdapter(pubClient, subClient));
-    // Clear Redis online presence cache on server start
-    pubClient.del('online_users').catch(err => logger.error(`Redis startup cleanup error: ${err.message}`));
+    // No blind delete of 'online_users' to support multi-instance scale
   } else {
     logger.warn('Redis is not connected. Socket.io will use memory adapter.');
   }
@@ -197,18 +196,48 @@ function initSocket(httpServer) {
       logger.debug(`User ${socket.user.userId} left room ${roomName}`);
     });
 
-    socket.on('typing', ({ chatRoomId }) => {
+    socket.on('typing', async ({ chatRoomId }) => {
       if (!chatRoomId) return;
+
+      // Check if user is participant
+      const participant = await prisma.chatParticipant.findUnique({
+        where: { chatRoomId_userId: { chatRoomId, userId: socket.user.userId } }
+      });
+      if (!participant) return;
+
       const roomName = `chat_${chatRoomId}`;
       // Broadcast to everyone in the room except the sender
       socket.to(roomName).emit('user_typing', { chatRoomId, userId: socket.user.userId });
     });
 
-    socket.on('subscribe_presence', (userIds) => {
-      if (!Array.isArray(userIds)) return;
-      userIds.forEach(id => {
-        socket.join(`presence_${id}`);
-      });
+    socket.on('subscribe_presence', async (userIds) => {
+      if (!Array.isArray(userIds) || userIds.length === 0) return;
+
+      try {
+        // Optimization: Find all common chat rooms for the requester
+        const myRooms = await prisma.chatParticipant.findMany({
+          where: { userId: socket.user.userId },
+          select: { chatRoomId: true }
+        });
+        const myRoomIds = myRooms.map(r => r.chatRoomId);
+
+        // Find which of the requested users share at least one of these rooms
+        const allowedPartners = await prisma.chatParticipant.findMany({
+          where: {
+            chatRoomId: { in: myRoomIds },
+            userId: { in: userIds }
+          },
+          select: { userId: true }
+        });
+
+        const allowedUserIds = new Set(allowedPartners.map(p => p.userId));
+
+        allowedUserIds.forEach(id => {
+          socket.join(`presence_${id}`);
+        });
+      } catch (err) {
+        logger.error(`Error in subscribe_presence: ${err.message}`);
+      }
     });
 
     socket.on('unsubscribe_presence', (userIds) => {

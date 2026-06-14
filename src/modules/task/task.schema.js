@@ -46,6 +46,7 @@ const listTasksSchema = z.object({
   query: z.string().optional(),
   minPrice: z.string().regex(/^\d+$/).transform(Number).optional(),
   maxPrice: z.string().regex(/^\d+$/).transform(Number).optional(),
+  sort: z.enum(['priceAsc', 'priceDesc', 'newest']).optional(),
 }).refine(data => {
   if (data.minPrice && data.maxPrice) {
     return data.maxPrice >= data.minPrice;

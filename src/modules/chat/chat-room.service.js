@@ -85,28 +85,47 @@ async function getOrCreateTaskRoom(userId, taskId) {
     throw new AppError('Topshiriq uchun hali ijrochi tanlanmagan', 400);
   }
 
-  const participantsData = [
-    { userId: task.clientId, role: 'OWNER' },
-    { userId: task.freelancerId, role: 'MEMBER' }
-  ];
+  // Dedup participants by userId, OWNER has priority, only ACCEPTED collaborators
+  const participantMap = new Map();
+  participantMap.set(task.clientId, 'OWNER');
+  if (task.freelancerId) {
+    participantMap.set(task.freelancerId, 'MEMBER');
+  }
 
-  task.collaborators.forEach(c => {
-    participantsData.push({ userId: c.freelancerId, role: 'MEMBER' });
-  });
-
-  const newRoom = await prisma.chatRoom.create({
-    data: {
-      type: 'TASK_ROOM',
-      name: task.title,
-      taskId: task.id,
-      participants: {
-        create: participantsData
+  task.collaborators
+    .filter(c => c.status === 'ACCEPTED')
+    .forEach(c => {
+      if (!participantMap.has(c.freelancerId)) {
+        participantMap.set(c.freelancerId, 'MEMBER');
       }
-    },
-    include: { participants: true }
-  });
+    });
 
-  return newRoom;
+  const participantsData = Array.from(participantMap, ([userId, role]) => ({ userId, role }));
+
+  try {
+    const newRoom = await prisma.chatRoom.create({
+      data: {
+        type: 'TASK_ROOM',
+        name: task.title,
+        taskId: task.id,
+        participants: {
+          create: participantsData
+        }
+      },
+      include: { participants: true }
+    });
+
+    return newRoom;
+  } catch (err) {
+    // Handle race condition: if room was created by another request in the meantime
+    if (err.code === 'P2002') {
+      return prisma.chatRoom.findUnique({
+        where: { taskId },
+        include: { participants: true }
+      });
+    }
+    throw err;
+  }
 }
 
 // Yangi ixtiyoriy guruh yaratish (CUSTOM_GROUP)
@@ -133,10 +152,17 @@ async function createCustomGroup(creatorId, name, avatarUrl) {
 // Guruh sozlamalarini o'zgartirish (Faqat OWNER va ADMIN)
 async function updateGroupSettings(chatRoomId, requesterId, name, avatarUrl) {
   const participant = await prisma.chatParticipant.findUnique({
-    where: { chatRoomId_userId: { chatRoomId, userId: requesterId } }
+    where: { chatRoomId_userId: { chatRoomId, userId: requesterId } },
+    include: { chatRoom: true }
   });
 
-  if (!participant || (participant.role !== 'OWNER' && participant.role !== 'ADMIN')) {
+  if (!participant) throw new AppError('Siz guruh a\'zosi emassiz', 403);
+
+  if (participant.chatRoom.type === 'TASK_ROOM') {
+    throw new AppError('Vazifa guruhi sozlamalarini o\'zgartirib bo\'lmaydi', 403);
+  }
+
+  if (participant.role !== 'OWNER' && participant.role !== 'ADMIN') {
     throw new AppError('Sizda guruh sozlamalarini o\'zgartirish huquqi yo\'q', 403);
   }
 
@@ -155,15 +181,22 @@ async function removeParticipant(chatRoomId, requesterId, targetUserId) {
   }
 
   const requester = await prisma.chatParticipant.findUnique({
-    where: { chatRoomId_userId: { chatRoomId, userId: requesterId } }
+    where: { chatRoomId_userId: { chatRoomId, userId: requesterId } },
+    include: { chatRoom: true }
   });
+
+  if (!requester) throw new AppError('Siz guruh a\'zosi emassiz', 403);
+
+  if (requester.chatRoom.type === 'TASK_ROOM') {
+    throw new AppError('Vazifa guruhidan ishtirokchini qo\'lda chiqarib bo\'lmaydi', 403);
+  }
 
   const target = await prisma.chatParticipant.findUnique({
     where: { chatRoomId_userId: { chatRoomId, userId: targetUserId } }
   });
 
   if (!target) throw new AppError('Foydalanuvchi guruhda topilmadi', 404);
-  if (!requester || (requester.role !== 'OWNER' && requester.role !== 'ADMIN')) {
+  if (requester.role !== 'OWNER' && requester.role !== 'ADMIN') {
     throw new AppError('Ishtirokchini chetlatish uchun huquq yetarli emas', 403);
   }
 
@@ -182,10 +215,15 @@ async function removeParticipant(chatRoomId, requesterId, targetUserId) {
 // O'z xohishi bilan guruhdan chiqish
 async function leaveGroup(chatRoomId, userId) {
   const participant = await prisma.chatParticipant.findUnique({
-    where: { chatRoomId_userId: { chatRoomId, userId } }
+    where: { chatRoomId_userId: { chatRoomId, userId } },
+    include: { chatRoom: true }
   });
 
   if (!participant) throw new AppError('Siz guruh a\'zosi emassiz', 404);
+
+  if (participant.chatRoom.type === 'TASK_ROOM') {
+    throw new AppError('Vazifa guruhidan chiqib ketish ruxsat etilmagan', 403);
+  }
 
   await prisma.chatParticipant.delete({
     where: { id: participant.id }
@@ -217,6 +255,119 @@ async function leaveGroup(chatRoomId, userId) {
   }
 
   return true;
+}
+
+// Ishtirokchi rolini o'zgartirish (Faqat OWNER)
+async function updateParticipantRole(chatRoomId, requesterId, targetUserId, newRole) {
+  const requester = await prisma.chatParticipant.findUnique({
+    where: { chatRoomId_userId: { chatRoomId, userId: requesterId } },
+    include: { chatRoom: true }
+  });
+
+  if (!requester || requester.role !== 'OWNER') {
+    throw new AppError('Faqat guruh yaratuvchisi rollarni o\'zgartira oladi', 403);
+  }
+
+  if (requester.chatRoom.type === 'TASK_ROOM') {
+    throw new AppError('Vazifa guruhida rollarni o\'zgartirib bo\'lmaydi', 403);
+  }
+
+  const target = await prisma.chatParticipant.findUnique({
+    where: { chatRoomId_userId: { chatRoomId, userId: targetUserId } }
+  });
+
+  if (!target) throw new AppError('Foydalanuvchi guruhda topilmadi', 404);
+  if (targetUserId === requesterId) throw new AppError('O\'z rolingizni o\'zgartira olmaysiz', 400);
+
+  return prisma.chatParticipant.update({
+    where: { id: target.id },
+    data: { role: newRole }
+  });
+}
+
+// Ishtirokchini mute qilish (vaqtincha yozishdan cheklash)
+async function muteParticipant(chatRoomId, requesterId, targetUserId, durationMinutes) {
+  const requester = await prisma.chatParticipant.findUnique({
+    where: { chatRoomId_userId: { chatRoomId, userId: requesterId } }
+  });
+
+  if (!requester || (requester.role !== 'OWNER' && requester.role !== 'ADMIN')) {
+    throw new AppError('Ruxsat yo\'q', 403);
+  }
+
+  const target = await prisma.chatParticipant.findUnique({
+    where: { chatRoomId_userId: { chatRoomId, userId: targetUserId } }
+  });
+
+  if (!target) throw new AppError('Foydalanuvchi guruhda topilmadi', 404);
+  if (target.role === 'OWNER') throw new AppError('Guruh yaratuvchisini cheklab bo\'lmaydi', 403);
+
+  const mutedUntil = new Date();
+  mutedUntil.setMinutes(mutedUntil.getMinutes() + durationMinutes);
+
+  return prisma.chatParticipant.update({
+    where: { id: target.id },
+    data: { mutedUntil }
+  });
+}
+
+// Foydalanuvchini guruhdan butunlay ban qilish
+async function banUserFromRoom(chatRoomId, requesterId, targetUserId) {
+  const requester = await prisma.chatParticipant.findUnique({
+    where: { chatRoomId_userId: { chatRoomId, userId: requesterId } }
+  });
+
+  if (!requester || (requester.role !== 'OWNER' && requester.role !== 'ADMIN')) {
+    throw new AppError('Ruxsat yo\'q', 403);
+  }
+
+  const room = await prisma.chatRoom.findUnique({ where: { id: chatRoomId } });
+  if (room.type === 'TASK_ROOM') throw new AppError('Vazifa guruhida ban qilish ruxsat etilmagan', 403);
+
+  // Ishtirokchini chiqarib yuboramiz (kick)
+  try {
+    const target = await prisma.chatParticipant.findUnique({
+      where: { chatRoomId_userId: { chatRoomId, userId: targetUserId } }
+    });
+    if (target) {
+      if (target.role === 'OWNER') throw new AppError('Guruh yaratuvchisini ban qilib bo\'lmaydi', 403);
+      await prisma.chatParticipant.delete({ where: { id: target.id } });
+    }
+  } catch (e) {}
+
+  // bannedUserIds ro'yxatiga qo'shamiz
+  const bannedUserIds = room.bannedUserIds || [];
+  if (!bannedUserIds.includes(targetUserId)) {
+    bannedUserIds.push(targetUserId);
+  }
+
+  return prisma.chatRoom.update({
+    where: { id: chatRoomId },
+    data: { bannedUserIds }
+  });
+}
+
+// Guruh sozlamalarini (slowMode, isReadOnly) o'zgartirish
+async function updateAdvancedGroupSettings(chatRoomId, requesterId, settings) {
+  const requester = await prisma.chatParticipant.findUnique({
+    where: { chatRoomId_userId: { chatRoomId, userId: requesterId } },
+    include: { chatRoom: true }
+  });
+
+  if (!requester || (requester.role !== 'OWNER' && requester.role !== 'ADMIN')) {
+    throw new AppError('Ruxsat yo\'q', 403);
+  }
+
+  const currentSettings = (requester.chatRoom.settings && typeof requester.chatRoom.settings === 'object') 
+    ? requester.chatRoom.settings 
+    : {};
+
+  return prisma.chatRoom.update({
+    where: { id: chatRoomId },
+    data: { 
+      settings: { ...currentSettings, ...settings } 
+    }
+  });
 }
 
 /**
@@ -265,16 +416,26 @@ async function searchUsersForInvite(query, chatRoomId) {
 async function sendInvite(chatRoomId, inviterId, inviteeId) {
   // Inviter ruxsatini tekshiramiz
   const inviter = await prisma.chatParticipant.findUnique({
-    where: { chatRoomId_userId: { chatRoomId, userId: inviterId } }
+    where: { chatRoomId_userId: { chatRoomId, userId: inviterId } },
+    include: { chatRoom: true }
   });
 
   if (!inviter) throw new AppError('Siz ushbu guruh a\'zosi emassiz', 403);
+
+  if (inviter.chatRoom.type === 'TASK_ROOM') {
+    throw new AppError('Vazifa guruhiga qo\'lda taklif yuborib bo\'lmaydi', 403);
+  }
 
   // Allaqachon a'zo bo'lmasligi kerak
   const existingParticipant = await prisma.chatParticipant.findUnique({
     where: { chatRoomId_userId: { chatRoomId, userId: inviteeId } }
   });
   if (existingParticipant) throw new AppError('Bu foydalanuvchi allaqachon guruhda', 400);
+
+  // Ban tekshiruvi
+  if (inviter.chatRoom.bannedUserIds?.includes(inviteeId)) {
+    throw new AppError('Ushbu foydalanuvchi guruhdan ban qilingan', 400);
+  }
 
   // Allaqachon PENDING taklif bormi?
   const existingInvite = await prisma.chatInvite.findUnique({
@@ -312,6 +473,11 @@ async function acceptInvite(inviteId, userId) {
   if (!invite) throw new AppError('Taklif topilmadi', 404);
   if (invite.inviteeId !== userId) throw new AppError('Bu taklif sizga tegishli emas', 403);
   if (invite.status !== 'PENDING') throw new AppError('Taklif allaqachon ko\'rib chiqilgan', 400);
+
+  // Ban tekshiruvi
+  if (invite.chatRoom.bannedUserIds?.includes(userId)) {
+    throw new AppError('Siz ushbu guruhdan ban qilingansiz', 403);
+  }
 
   // Statusni yangilash va Participant qilib qo'shish
   await prisma.$transaction([

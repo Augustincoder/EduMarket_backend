@@ -4,9 +4,7 @@ const env = require('./env');
 
 // Using default redis connection locally (localhost:6379)
 // In production, configure REDIS_URL in .env
-const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
-
-const pubClient = createClient({ url: REDIS_URL });
+const pubClient = createClient({ url: env.REDIS_URL });
 const subClient = pubClient.duplicate();
 
 async function connectRedis() {

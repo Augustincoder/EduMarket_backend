@@ -1,7 +1,7 @@
 const { z } = require('zod');
 
 const sendMessageSchema = z.object({
-  type: z.enum(['TEXT', 'FILE', 'SYSTEM_EVENT']).optional().default('TEXT'),
+  type: z.enum(['TEXT', 'FILE']).optional().default('TEXT'),
   content: z.string().max(2000, "Xabar 2000 ta belgidan oshmasligi kerak").trim().optional().nullable(),
   fileId: z.string().optional().nullable(),
   fileType: z.enum(['photo', 'document', 'video', 'voice']).optional().nullable(),

@@ -137,7 +137,65 @@ async function notifyChatMessage(recipientId, senderName, chatRoomId) {
   await sendTelegramMessage(recipient.telegramId.toString(), text, keyboard);
 
   if (pushToken) {
-    await sendPushNotification(pushToken, title, text.replace(/<[^>]*>?/gm, ''), { taskId, type: 'chat_message' });
+    await sendPushNotification(pushToken, title, text.replace(/<[^>]*>?/gm, ''), { chatRoomId, type: 'chat_message' });
+  }
+}
+
+/**
+ * Bulk chat notifications optimized for group chats (Fixing 3.6 N+1 issue)
+ */
+async function notifyChatMessageBulk(recipientIds, senderName, chatRoomId) {
+  if (!recipientIds || recipientIds.length === 0) return;
+
+  const title = "💬 Yangi xabar";
+  const text = `<b>${senderName}</b> sizga xabar yubordi.`;
+  const plainText = text.replace(/<[^>]*>?/gm, '');
+  const actionUrl = `/chat/${chatRoomId}`;
+
+  // 1. Create DB notifications in bulk
+  await prisma.notification.createMany({
+    data: recipientIds.map(userId => ({
+      userId,
+      type: 'chat_message',
+      title,
+      message: plainText,
+      actionUrl
+    }))
+  });
+
+  // Emit socket events for DB notifications (still needed for real-time UI updates)
+  // Note: createMany doesn't return IDs or full objects, so we just emit a generic event if needed
+  // or fetch them back. Usually, a refresh event or simple 'new_notification' is enough.
+  recipientIds.forEach(userId => {
+    try {
+      getIO().to(`user_${userId}`).emit('new_notification', { type: 'chat_message', title, message: plainText, actionUrl });
+    } catch (e) {}
+  });
+
+  // 2. Fetch user settings in bulk
+  const users = await prisma.user.findMany({
+    where: { id: { in: recipientIds } },
+    select: { id: true, telegramId: true, pushToken: true, notifPrefs: true }
+  });
+
+  const keyboard = [[{ text: "Chatni ochish", web_app: { url: `https://t.me/${env.BOT_USERNAME}/app?startapp=chat_${chatRoomId}` } }]];
+
+  // 3. Send Telegram and Push in parallel chunks
+  const chunkSize = 10;
+  for (let i = 0; i < users.length; i += chunkSize) {
+    const chunk = users.slice(i, i + chunkSize);
+    await Promise.allSettled(chunk.map(async (user) => {
+      const notifPrefs = user.notifPrefs || {};
+      if (notifPrefs.chatMessage === false) return;
+
+      if (user.telegramId) {
+        await sendTelegramMessage(user.telegramId.toString(), text, keyboard);
+      }
+      
+      if (user.pushToken) {
+        await sendPushNotification(user.pushToken, title, plainText, { chatRoomId, type: 'chat_message' });
+      }
+    }));
   }
 }
 
@@ -370,6 +428,7 @@ module.exports = {
   notifyNewBid,
   notifyTaskAssigned,
   notifyChatMessage,
+  notifyChatMessageBulk,
   notifyDeadlineApproaching,
   notifyReviewReceived,
   autoCompleted,

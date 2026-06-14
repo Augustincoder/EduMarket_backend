@@ -3,7 +3,6 @@ const { AppError } = require('../../middleware/errorHandler');
 const { getIO, isUserOnline, getOnlineUsersSet } = require('../../config/socket');
 const logger = require('../../utils/logger');
 const notificationService = require('../notification/notification.service');
-const { v4: uuidv4 } = require('uuid');
 const { chatQueue } = require('../../config/queue');
 
 /**
@@ -20,52 +19,75 @@ async function checkChatAccess(chatRoomId, userId) {
     throw new AppError('Ushbu chatga kirish huquqingiz yo\'q', 403);
   }
 
-  return participant.chatRoom;
+  return { room: participant.chatRoom, participant };
 }
 
 // Xabar yuborish (Matn yoki Fayl)
 async function sendMessage(chatRoomId, senderId, data) {
-  const room = await checkChatAccess(chatRoomId, senderId);
+  const { room, participant } = await checkChatAccess(chatRoomId, senderId);
 
-  // Optimistic ID generation
-  const messageId = uuidv4();
-  const createdAt = new Date();
+  // 1. Check if room is archived
+  if (room.isArchived) throw new AppError('Ushbu chat arxivlangan, xabar yuborib bo\'lmaydi', 403);
 
-  // Fetch sender info for socket
-  const sender = await prisma.user.findUnique({
-    where: { id: senderId },
-    select: { id: true, fullname: true, username: true, avatarUrl: true }
-  });
+  // 2. Check if user is muted
+  if (participant.mutedUntil && new Date(participant.mutedUntil) > new Date()) {
+    throw new AppError('Siz yozishdan cheklangansiz', 403);
+  }
+
+  // 3. Check Slow-mode
+  const settings = (room.settings && typeof room.settings === 'object') ? room.settings : {};
+  if (settings.slowModeSeconds && participant.role === 'MEMBER') {
+    const lastMessage = await prisma.chatMessage.findFirst({
+      where: { chatRoomId, senderId },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    if (lastMessage) {
+      const diffSeconds = (new Date() - new Date(lastMessage.createdAt)) / 1000;
+      if (diffSeconds < settings.slowModeSeconds) {
+        throw new AppError(`Iltimos, navbatdagi xabar uchun ${Math.ceil(settings.slowModeSeconds - diffSeconds)} soniya kuting (Slow-mode)`, 429);
+      }
+    }
+  }
 
   // Fetch replyTo if exists
   let replyTo = null;
   if (data.replyToId) {
     replyTo = await prisma.chatMessage.findUnique({
       where: { id: data.replyToId },
-      select: { id: true, content: true, fileType: true, sender: { select: { fullname: true } } }
+      select: { id: true, chatRoomId: true, content: true, fileType: true, sender: { select: { fullname: true } } }
     });
+
+    if (!replyTo || replyTo.chatRoomId !== chatRoomId) {
+      replyTo = null;
+      data.replyToId = null;
+    }
   }
 
-  // Construct message object
-  const message = {
-    id: messageId,
-    chatRoomId,
-    senderId,
-    type: data.type || 'TEXT',
-    content: data.content,
-    fileId: data.fileId,
-    fileType: data.fileType,
-    fileName: data.fileName,
-    isSecureFile: data.isSecureFile || false,
-    replyToId: data.replyToId,
-    clientId: data.clientId || null,
-    metadata: data.metadata || null,
-    createdAt: createdAt.toISOString(), // ISO for socket
-    sender,
-    replyTo
-  };
+  // 1. Save to DB Synchronously (Outbox Pattern)
+  const message = await prisma.chatMessage.create({
+    data: {
+      chatRoomId,
+      senderId,
+      type: data.type || 'TEXT',
+      content: data.content,
+      fileId: data.fileId,
+      fileType: data.fileType,
+      fileName: data.fileName,
+      isSecureFile: data.isSecureFile || false,
+      replyToId: data.replyToId,
+      metadata: data.metadata || null,
+    },
+    include: {
+      sender: { select: { id: true, fullname: true, username: true, avatarUrl: true } },
+      reactions: { select: { icon: true, userId: true } },
+      replyTo: {
+        select: { id: true, content: true, fileType: true, sender: { select: { fullname: true } } }
+      }
+    }
+  });
 
-  // 1. Emit to Socket immediately
+  // 2. Emit to Socket immediately for real-time feel
   try {
     const io = getIO();
     io.to(`chat_${chatRoomId}`).emit('new_message', message);
@@ -73,21 +95,22 @@ async function sendMessage(chatRoomId, senderId, data) {
     logger.error(`Socket emit failed: ${err.message}`);
   }
 
-  // 2. Add to BullMQ for DB save and Offline Notifications
+  // 3. Add side-effects to BullMQ (Offline Notifications, analytics, etc)
   try {
     const participants = await prisma.chatParticipant.findMany({
-      where: { chatRoomId }
+      where: { chatRoomId },
+      select: { userId: true }
     });
     
-    await chatQueue.add('save_message', {
-      message,
+    await chatQueue.add('process_message_side_effects', {
+      messageId: message.id,
       participants,
-      taskId: room.taskId,
       chatRoomId,
-      senderId
+      senderId,
+      senderName: message.sender?.fullname || 'Foydalanuvchi'
     });
   } catch (err) {
-    logger.error(`Failed to add message to Queue: ${err.message}`);
+    logger.error(`Failed to add message side-effects to Queue: ${err.message}`);
   }
 
   return message;
@@ -95,35 +118,24 @@ async function sendMessage(chatRoomId, senderId, data) {
 
 // Tizim xabari (System Event) yuborish (Bot kabi)
 async function sendSystemEvent(chatRoomId, content, metadata = null) {
-  const messageId = uuidv4();
-  const createdAt = new Date();
+  // 1. Save to DB
+  const message = await prisma.chatMessage.create({
+    data: {
+      chatRoomId,
+      senderId: null, // Tizim xabari
+      type: 'SYSTEM_EVENT',
+      content,
+      metadata
+    }
+  });
 
-  const message = {
-    id: messageId,
-    chatRoomId,
-    senderId: null, // Tizim xabari
-    type: 'SYSTEM_EVENT',
-    content,
-    metadata,
-    createdAt: createdAt.toISOString()
-  };
-
+  // 2. Emit to Socket
   try {
     const io = getIO();
     io.to(`chat_${chatRoomId}`).emit('new_message', message);
   } catch (err) {}
 
-  try {
-    await chatQueue.add('save_message', {
-      message,
-      participants: null, // Skip offline notifications for system events
-      chatRoomId,
-      senderId: null
-    });
-  } catch (err) {
-    logger.error(`Failed to add system event to Queue: ${err.message}`);
-  }
-
+  // System events usually don't need offline push notifications
   return message;
 }
 
@@ -167,34 +179,62 @@ async function pinMessage(chatRoomId, requesterId, messageId) {
   return room;
 }
 
-// Cursor-based Pagination yordamida xabarlarni yuklash
+// Composite cursor-based Pagination yordamida xabarlarni yuklash
 async function getMessages(chatRoomId, userId, cursor, limit = 50) {
   await checkChatAccess(chatRoomId, userId);
 
   const where = { chatRoomId };
+  
   if (cursor) {
-    where.id = { lt: cursor }; // older messages
+    try {
+      // Decode base64 cursor: "timestamp_id"
+      const decoded = Buffer.from(cursor, 'base64').toString('utf-8');
+      const [timestamp, cursorId] = decoded.split('_');
+      const cursorDate = new Date(timestamp);
+
+      where.OR = [
+        { createdAt: { lt: cursorDate } },
+        { 
+          createdAt: cursorDate,
+          id: { lt: cursorId }
+        }
+      ];
+    } catch (e) {
+      logger.error(`Invalid cursor format: ${cursor}`);
+    }
   }
 
   const messages = await prisma.chatMessage.findMany({
     where,
     take: limit,
-    orderBy: { id: 'desc' },
+    orderBy: [
+      { createdAt: 'desc' },
+      { id: 'desc' }
+    ],
     include: {
       sender: { select: { id: true, fullname: true, username: true, avatarUrl: true } },
+      reactions: { select: { icon: true, userId: true } },
       replyTo: {
         select: { id: true, content: true, fileType: true, sender: { select: { fullname: true } } }
       }
     }
   });
 
-  const nextCursor = messages.length === limit ? messages[messages.length - 1].id : null;
+  let nextCursor = null;
+  if (messages.length === limit) {
+    const lastMsg = messages[messages.length - 1];
+    // Encode next cursor as base64: "ISOString_id"
+    nextCursor = Buffer.from(`${lastMsg.createdAt.toISOString()}_${lastMsg.id}`).toString('base64');
+  }
 
-  // Shu joyda lastReadAt ni yangilaymiz
-  await prisma.chatParticipant.update({
-    where: { chatRoomId_userId: { chatRoomId, userId } },
-    data: { lastReadAt: new Date() }
-  });
+  // Faqat birinchi sahifada (cursor yo'q) lastReadAt ni yangilaymiz
+  // Bu foydalanuvchi tarixni skrol qilayotganda yangi xabarlarni "o'qilgan" deb belgilab qo'ymaslik uchun
+  if (!cursor) {
+    await prisma.chatParticipant.update({
+      where: { chatRoomId_userId: { chatRoomId, userId } },
+      data: { lastReadAt: new Date() }
+    });
+  }
 
   return { messages, nextCursor };
 }
@@ -229,6 +269,7 @@ async function getConversations(userId) {
     INNER JOIN "chat_participants" p ON m."chat_room_id" = p."chat_room_id"
     WHERE p."user_id" = ${userId}
       AND m."sender_id" IS DISTINCT FROM ${userId}
+      AND m."is_deleted" = false
       AND (p."last_read_at" IS NULL OR m."created_at" > p."last_read_at")
     GROUP BY m."chat_room_id"
   `;
@@ -341,29 +382,34 @@ async function toggleReaction(messageId, userId, icon) {
   
   await checkChatAccess(message.chatRoomId, userId);
 
-  let reactions = [];
-  try {
-    reactions = typeof message.reactions === 'string' ? JSON.parse(message.reactions) : message.reactions || [];
-    if (!Array.isArray(reactions)) reactions = [];
-  } catch(e) {
-    reactions = [];
-  }
+  const existingReaction = await prisma.messageReaction.findUnique({
+    where: { messageId_userId: { messageId, userId } }
+  });
 
-  const existingReactionIndex = reactions.findIndex(r => r.userId === userId);
-
-  if (existingReactionIndex !== -1) {
-    if (reactions[existingReactionIndex].icon === icon) {
-      reactions.splice(existingReactionIndex, 1);
+  if (existingReaction) {
+    if (existingReaction.icon === icon) {
+      // O'chirish (Toggle off)
+      await prisma.messageReaction.delete({
+        where: { id: existingReaction.id }
+      });
     } else {
-      reactions[existingReactionIndex].icon = icon;
+      // Iconni yangilash
+      await prisma.messageReaction.update({
+        where: { id: existingReaction.id },
+        data: { icon }
+      });
     }
   } else {
-    reactions.push({ icon, userId });
+    // Yangi qo'shish
+    await prisma.messageReaction.create({
+      data: { messageId, userId, icon }
+    });
   }
 
-  const updatedMessage = await prisma.chatMessage.update({
-    where: { id: messageId },
-    data: { reactions }
+  // Barcha reaksiyalarni qaytadan o'qiymiz
+  const allReactions = await prisma.messageReaction.findMany({
+    where: { messageId },
+    select: { icon: true, userId: true }
   });
 
   try {
@@ -371,24 +417,51 @@ async function toggleReaction(messageId, userId, icon) {
     io.to(`chat_${message.chatRoomId}`).emit('message_reaction_updated', { 
       messageId, 
       chatRoomId: message.chatRoomId, 
-      reactions 
+      reactions: allReactions 
     });
   } catch (err) {}
 
-  return updatedMessage;
+  return { messageId, reactions: allReactions };
 }
 
 // Xabarlarni o'qilgan deb belgilash
 async function markAsRead(chatRoomId, userId) {
   await checkChatAccess(chatRoomId, userId);
   
+  // Find the last message in the room
+  const lastMessage = await prisma.chatMessage.findFirst({
+    where: { chatRoomId, isDeleted: false },
+    orderBy: { createdAt: 'desc' },
+    select: { id: true }
+  });
+
+  const now = new Date();
+
+  // Update participant's lastReadAt
   await prisma.chatParticipant.update({
     where: { chatRoomId_userId: { chatRoomId, userId } },
-    data: { lastReadAt: new Date() }
+    data: { lastReadAt: now }
   });
-  
-  // Optionally, we could update message.isRead if we were doing per-message read receipts,
-  // but cursor-based room read tracking is usually enough (Slack style).
+
+  // Update or Create Read Receipt
+  if (lastMessage) {
+    await prisma.messageReadReceipt.upsert({
+      where: { chatRoomId_userId: { chatRoomId, userId } },
+      update: { lastReadMessageId: lastMessage.id, readAt: now },
+      create: { chatRoomId, userId, lastReadMessageId: lastMessage.id, readAt: now }
+    });
+
+    // Emit real-time read receipt
+    try {
+      const io = getIO();
+      io.to(`chat_${chatRoomId}`).emit('read_receipt', { 
+        chatRoomId, 
+        userId, 
+        lastReadMessageId: lastMessage.id,
+        readAt: now
+      });
+    } catch (err) {}
+  }
 
   return { success: true };
 }
@@ -426,6 +499,7 @@ async function searchGlobalMessages(userId, query) {
     orderBy: { _relevance: { fields: ['content'], search: formattedQuery, sort: 'desc' } },
     include: {
       sender: { select: { id: true, fullname: true, avatarUrl: true } },
+      reactions: { select: { icon: true, userId: true } },
       chatRoom: { 
         select: { 
           id: true, type: true, name: true, avatarUrl: true, 

@@ -15,6 +15,7 @@
     "db:studio": "npx prisma studio",
     "db:reset": "npx prisma migrate reset --force",
     "db:seed": "node prisma/seed.js",
+    "lint": "eslint src/**/*.js",
     "release": "standard-version",
     "release:minor": "standard-version --release-as minor",
     "release:patch": "standard-version --release-as patch",

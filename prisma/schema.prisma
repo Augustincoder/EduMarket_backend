@@ -19,6 +19,12 @@ enum CollaboratorStatus {
   DECLINED
 }
 
+enum ChatRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
 enum TaskStatus {
   OPEN
   ASSIGNED
@@ -149,7 +155,7 @@ model User {
   studyYear          Int?               @map("study_year")
   studentCardFileId  String?            @map("student_card_file_id")
   isVerifiedStudent  Boolean            @default(false) @map("is_verified_student")
-  verificationStatus VerificationStatus @default(REJECTED) @map("verification_status") // REJECTED here acts as 'NOT_SUBMITTED' initially if status is PENDING/APPROVED
+  verificationStatus VerificationStatus @default(NOT_SUBMITTED) @map("verification_status")
 
   // ── Analytics (Phase 14) ──
   completionRate Float? @map("completion_rate") // hisoblangan: scheduler
@@ -204,6 +210,7 @@ model User {
   verificationRequests VerificationRequest[]
   notifications        Notification[]        @relation("UserNotifications")
   taskFlags            TaskFlag[]
+  chatReactions        MessageReaction[]
   reputationDNA        ReputationDNA?
   collaborations       TaskCollaborator[]
 
@@ -333,7 +340,7 @@ model ChatMessage {
   metadata     Json?   @map("metadata")
 
   replyToId String? @map("reply_to_id")
-  reactions Json    @default("[]")
+  reactions MessageReaction[]
 
   isEdited  Boolean   @default(false) @map("is_edited")
   editedAt  DateTime? @map("edited_at")
@@ -788,11 +795,16 @@ model TaskCollaborator {
 model ChatRoom {
   id     String   @id @default(cuid())
   type   ChatType @default(DIRECT)
-  taskId String?  @map("task_id")
+  taskId String?  @unique @map("task_id")
 
   name        String?
   avatarUrl   String?
   pinnedMsgId String? @unique @map("pinned_message_id")
+
+  // yangi: guruh sozlamalari va moderatsiya
+  settings      Json     @default("{}") @map("settings")
+  bannedUserIds String[] @default([]) @map("banned_user_ids")
+  isArchived    Boolean  @default(false) @map("is_archived")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -812,7 +824,8 @@ model ChatParticipant {
   chatRoomId String @map("chat_room_id")
   userId     String @map("user_id")
 
-  role       String    @default("MEMBER")
+  role       ChatRole  @default(MEMBER)
+  mutedUntil DateTime? @map("muted_until")
   lastReadAt DateTime? @map("last_read_at")
   joinedAt   DateTime  @default(now()) @map("joined_at")
 
@@ -822,6 +835,16 @@ model ChatParticipant {
   @@unique([chatRoomId, userId])
   @@index([chatRoomId])
   @@map("chat_participants")
+}
+
+model MessageReadReceipt {
+  chatRoomId        String   @map("chat_room_id")
+  userId            String   @map("user_id")
+  lastReadMessageId String?  @map("last_read_message_id")
+  readAt            DateTime @default(now()) @map("read_at")
+
+  @@id([chatRoomId, userId])
+  @@map("message_read_receipts")
 }
 
 model ChatInvite {
@@ -840,4 +863,18 @@ model ChatInvite {
 
   @@unique([chatRoomId, inviteeId])
   @@map("chat_invites")
+}
+
+model MessageReaction {
+  id        String   @id @default(cuid())
+  messageId String   @map("message_id")
+  userId    String   @map("user_id")
+  icon      String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  message ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user    User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId])
+  @@map("message_reactions")
 }

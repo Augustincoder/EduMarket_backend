@@ -74,13 +74,36 @@ async function createReview(taskId, fromUserId, data) {
 
     // Update user rating only if review is legit
     if (isLegit) {
-      await tx.user.update({
-        where: { id: toUserId },
-        data: {
-          ratingSum: { increment: rating },
-          ratingCount: { increment: 1 }
+      if (fromUserId === task.clientId && task.isCoWorking) {
+        // Co-working: distribute rating to all accepted collaborators
+        const collaborators = await tx.taskCollaborator.findMany({
+          where: { taskId, status: 'ACCEPTED' }
+        });
+
+        // Use a Set to avoid duplicates (though schema should prevent them)
+        const userIdsToUpdate = new Set();
+        if (task.freelancerId) userIdsToUpdate.add(task.freelancerId);
+        collaborators.forEach(c => userIdsToUpdate.add(c.freelancerId));
+
+        for (const userId of userIdsToUpdate) {
+          await tx.user.update({
+            where: { id: userId },
+            data: {
+              ratingSum: { increment: rating },
+              ratingCount: { increment: 1 }
+            }
+          });
         }
-      });
+      } else {
+        // Single user update (Normal Task or Freelancer reviewing Client)
+        await tx.user.update({
+          where: { id: toUserId },
+          data: {
+            ratingSum: { increment: rating },
+            ratingCount: { increment: 1 }
+          }
+        });
+      }
     }
 
     return review;

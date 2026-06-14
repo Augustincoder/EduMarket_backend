@@ -7,6 +7,7 @@ const taskRepository = require('../task/task.repository');
 const prisma = require('../../config/prisma'); // Keep for user queries temporarily if needed
 const chatRoomService = require('../chat/chat-room.service');
 const chatService = require('../chat/chat.service');
+const taskChatSyncService = require('../chat/taskChatSync.service');
 
 /**
  * Place a new bid on a task
@@ -126,6 +127,7 @@ async function acceptBid(taskId, bidId, clientId) {
     try {
       const room = await chatRoomService.getOrCreateTaskRoom(clientId, taskId);
       await chatService.sendSystemEvent(room.id, "🤝 Taklif qabul qilindi! Vazifa ijrochiga biriktirildi. Ishni boshlashingiz mumkin.");
+      await taskChatSyncService.syncTaskRoomParticipants(taskId);
     } catch(e) {}
     
     return updatedTask;
@@ -174,6 +176,7 @@ async function acceptCounterOffer(bidId, freelancerId) {
     try {
       const room = await chatRoomService.getOrCreateTaskRoom(freelancerId, bid.taskId);
       await chatService.sendSystemEvent(room.id, `🤝 Counter-offer qabul qilindi! Kelishilgan narx: ${bid.counterPrice} UZS. Ishni boshlashingiz mumkin.`);
+      await taskChatSyncService.syncTaskRoomParticipants(bid.taskId);
     } catch(e) {}
 
     return updatedTask;
@@ -235,6 +238,7 @@ async function assembleTeam(taskId, clientId, teamMembers) {
     try {
       const room = await chatRoomService.getOrCreateTaskRoom(clientId, taskId);
       await chatService.sendSystemEvent(room.id, `👥 Jamoa yig'ildi! ${teamMembers.length} ta ijrochi vazifaga biriktirildi. Ishni boshlashingiz mumkin.`);
+      await taskChatSyncService.syncTaskRoomParticipants(taskId);
     } catch(e) {}
 
     return updatedTask;

@@ -89,6 +89,40 @@ async function rejectInvite(req, res) {
 }
 
 /** =========================================
+ *  MODERATION CONTROLLERS (BOSQICH 2 qo'shimcha)
+ *  ========================================= */
+
+async function updateParticipantRole(req, res) {
+  const { chatRoomId, targetUserId } = req.params;
+  const { role } = req.body;
+  const userId = req.user.id;
+  const result = await chatRoomService.updateParticipantRole(chatRoomId, userId, targetUserId, role);
+  res.json({ success: true, data: result });
+}
+
+async function muteParticipant(req, res) {
+  const { chatRoomId, targetUserId } = req.params;
+  const { durationMinutes } = req.body;
+  const userId = req.user.id;
+  const result = await chatRoomService.muteParticipant(chatRoomId, userId, targetUserId, durationMinutes || 60);
+  res.json({ success: true, data: result });
+}
+
+async function banUserFromRoom(req, res) {
+  const { chatRoomId, targetUserId } = req.params;
+  const userId = req.user.id;
+  const result = await chatRoomService.banUserFromRoom(chatRoomId, userId, targetUserId);
+  res.json({ success: true, data: result });
+}
+
+async function updateAdvancedGroupSettings(req, res) {
+  const { chatRoomId } = req.params;
+  const userId = req.user.id;
+  const result = await chatRoomService.updateAdvancedGroupSettings(chatRoomId, userId, req.body);
+  res.json({ success: true, data: result });
+}
+
+/** =========================================
  *  MESSAGING CONTROLLERS (BOSQICH 3)
  *  ========================================= */
 
@@ -182,6 +216,10 @@ module.exports = {
   getMyInvites,
   acceptInvite,
   rejectInvite,
+  updateParticipantRole,
+  muteParticipant,
+  banUserFromRoom,
+  updateAdvancedGroupSettings,
   // Messaging
   sendMessage,
   getMessages,

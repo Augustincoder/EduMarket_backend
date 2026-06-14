@@ -7,6 +7,7 @@ const notificationService = require('../notification/notification.service');
 const logger = require('../../utils/logger');
 const chatRoomService = require('../chat/chat-room.service');
 const chatService = require('../chat/chat.service');
+const taskChatSyncService = require('../chat/taskChatSync.service');
 
 /**
  * Creates a new task
@@ -436,8 +437,12 @@ async function _changeTaskState(taskId, nextState, expectedUserId, roleStr) {
     if (msg) {
       await chatService.sendSystemEvent(room.id, msg);
     }
+
+    if (nextState === TASK_STATUS.COMPLETED || nextState === TASK_STATUS.CANCELED) {
+      await taskChatSyncService.archiveTaskRoom(taskId);
+    }
   } catch (err) {
-    logger.error(`Failed to send system event for task ${taskId}: ${err.message}`);
+    logger.error(`Failed to send system event or archive room for task ${taskId}: ${err.message}`);
   }
 
   return { 
@@ -485,7 +490,7 @@ async function submitPreviewDelivery(taskId, freelancerId, { previewFileIds, ful
         previewFileIds: previewFileIds || [], 
         fullFileIds: fullFileIds || [], 
         previewNote: note,
-        revisionCount: { increment: task.status === TASK_STATUS.IN_PROGRESS ? 0 : 1 }
+        revisionCount: { increment: 1 }
       }
     });
 
@@ -529,13 +534,17 @@ async function approvePreview(taskId, clientId) {
  * Called after client submits their review to unlock full files
  */
 async function revealFullDelivery(taskId, clientId) {
+  const task = await taskRepository.findUnique({ where: { id: taskId } });
+  if (!task) throw new AppError('Vazifa topilmadi', 404);
+  if (task.clientId !== clientId) throw new AppError('Ruxsat yo\'q', 403);
+
   const delivery = await prisma.workDelivery.findUnique({ where: { taskId } });
   if (!delivery) throw new AppError('Yetkazib berish topilmadi', 404);
   if (delivery.fullRevealedAt) return delivery; // Already revealed
   
   // Verify review was submitted
   const review = await prisma.review.findFirst({
-    where: { taskId, fromUserId: clientId }
+    where: { taskId, fromUserId: task.clientId }
   });
   if (!review) throw new AppError('Avval baho qoldiring', 400, 'REVIEW_REQUIRED');
   
@@ -577,102 +586,103 @@ async function getDeliveryFiles(taskId, userId, type = 'preview') {
 }
 
 async function acceptDelivery(taskId, clientId) {
-  const { updatedTask } = await _changeTaskState(taskId, TASK_STATUS.COMPLETED, clientId, 'CLIENT');
-  
-  // Phase 5: Referral Bonus Logic (5%) & Escrow distribution logic
-  try {
-    const price = updatedTask.agreedPrice || 0;
-    
+  const task = await taskRepository.findUnique({ where: { id: taskId } });
+  if (!task) throw new AppError('Vazifa topilmadi', 404);
+  if (task.clientId !== clientId) throw new AppError('Siz mijoz emassiz', 403);
+
+  validateTransition(task.status, TASK_STATUS.COMPLETED);
+
+  const updatedTask = await prisma.$transaction(async (tx) => {
+    // 1. Update Task Status
+    const updateResult = await tx.task.updateMany({
+      where: { id: taskId, status: task.status },
+      data: { status: TASK_STATUS.COMPLETED, completedAt: new Date() }
+    });
+
+    if (updateResult.count === 0) {
+      throw new AppError('Vazifa holati allaqachon o\'zgargan.', 409);
+    }
+
+    const t = await tx.task.findUnique({ 
+      where: { id: taskId },
+      include: { client: true, freelancer: true } 
+    });
+
+    // 2. Payout Logic
+    const price = t.agreedPrice || 0;
     if (price > 0) {
       let payoutList = [];
 
-      if (updatedTask.isCoWorking) {
-        // Fetch all collaborators
-        const collabs = await prisma.taskCollaborator.findMany({
+      if (t.isCoWorking) {
+        const collabs = await tx.taskCollaborator.findMany({
           where: { taskId, status: 'ACCEPTED' },
           include: { freelancer: true }
         });
         
         let totalDistributed = 0;
         collabs.forEach((c, index) => {
-          let amount;
-          if (index === collabs.length - 1) {
-            // Give remaining to the last person to avoid fractional UZS rounding loss
-            amount = price - totalDistributed;
-          } else {
-            amount = Math.floor(price * (c.sharePercent / 100));
-            totalDistributed += amount;
-          }
+          let amount = (index === collabs.length - 1) 
+            ? (price - totalDistributed) 
+            : Math.floor(price * (c.sharePercent / 100));
+          totalDistributed += amount;
           payoutList.push({ freelancer: c.freelancer, amount });
         });
-      } else if (updatedTask.freelancerId) {
-        const freelancer = await prisma.user.findUnique({ where: { id: updatedTask.freelancerId } });
+      } else if (t.freelancerId) {
+        const freelancer = await tx.user.findUnique({ where: { id: t.freelancerId } });
         if (freelancer) {
           payoutList.push({ freelancer, amount: price });
         }
       }
 
-      // Distribute escrow payouts and referral bonuses
-      const dbOps = [];
       for (const payout of payoutList) {
-        const freelancer = payout.freelancer;
-        const amount = payout.amount;
+        if (!payout.freelancer || payout.amount <= 0) continue;
 
-        if (!freelancer || amount <= 0) continue;
+        // Escrow Release
+        await tx.transactionLog.create({
+          data: {
+            userId: payout.freelancer.id,
+            taskId,
+            amount: payout.amount,
+            type: 'ESCROW_RELEASE',
+            status: 'COMPLETED',
+            notes: t.isCoWorking ? `Study Buddy ulushi (${payout.amount} UZS)` : 'Vazifa yakunlandi'
+          }
+        });
 
-        // 1. Escrow Release
-        dbOps.push(
-          prisma.transactionLog.create({
-            data: {
-              userId: freelancer.id,
-              taskId,
-              amount,
-              type: 'ESCROW_RELEASE',
-              status: 'COMPLETED',
-              notes: updatedTask.isCoWorking ? `Study Buddy ulushi (${amount} UZS)` : 'Vazifa yakunlandi'
-            }
-          })
-        );
-
-        // 2. Referral Bonus
-        if (freelancer.referredBy) {
-          const bonusAmount = Math.floor(amount * 0.05); // 5% bonus from their share
+        // Referral Bonus
+        if (payout.freelancer.referredBy) {
+          const bonusAmount = Math.floor(payout.amount * 0.05);
           if (bonusAmount > 0) {
-            dbOps.push(
-              prisma.user.update({
-                where: { id: freelancer.referredBy },
-                data: { referralEarned: { increment: bonusAmount } }
-              })
-            );
-            dbOps.push(
-              prisma.transactionLog.create({
-                data: {
-                  userId: freelancer.referredBy,
-                  taskId,
-                  amount: bonusAmount,
-                  type: 'REFERRAL_BONUS',
-                  status: 'COMPLETED',
-                  notes: `${freelancer.fullname} tomonidan bajarilgan vazifadan 5% bonus`
-                }
-              })
-            );
+            await tx.user.update({
+              where: { id: payout.freelancer.referredBy },
+              data: { referralEarned: { increment: bonusAmount } }
+            });
+            await tx.transactionLog.create({
+              data: {
+                userId: payout.freelancer.referredBy,
+                taskId,
+                amount: bonusAmount,
+                type: 'REFERRAL_BONUS',
+                status: 'COMPLETED',
+                notes: `${payout.freelancer.fullname} tomonidan bajarilgan vazifadan 5% bonus`
+              }
+            });
           }
         }
       }
-
-      if (dbOps.length > 0) {
-        await prisma.$transaction(dbOps);
-      }
     }
-  } catch (err) {
-    logger.error(`Referral bonus error: ${err.message}`);
-  }
+    return t;
+  });
 
-  await notificationService.taskCompleted(updatedTask);
-  
-  // Phase 7: Live Task Pulse Feed
+  // 3. Post-transaction side effects
   try {
     const io = getIO();
+    io.to(`task_${taskId}`).emit('task_status_changed', { taskId, newStatus: TASK_STATUS.COMPLETED });
+    
+    const room = await chatRoomService.getOrCreateTaskRoom(clientId, taskId);
+    await chatService.sendSystemEvent(room.id, "🎉 Vazifa muvaffaqiyatli yakunlandi! Hamkorlik uchun rahmat.");
+    await taskChatSyncService.archiveTaskRoom(taskId);
+
     io.emit('platform_pulse', {
       event: 'TASK_COMPLETED',
       category: updatedTask.category,
@@ -680,8 +690,10 @@ async function acceptDelivery(taskId, clientId) {
       timestamp: Date.now()
     });
   } catch (err) {
-    // ignore socket errors
+    logger.error(`Post-accept delivery error: ${err.message}`);
   }
+
+  await notificationService.taskCompleted(updatedTask);
   
   return updatedTask;
 }
