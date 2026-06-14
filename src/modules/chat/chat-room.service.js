@@ -205,9 +205,21 @@ async function removeParticipant(chatRoomId, requesterId, targetUserId) {
     throw new AppError('Guruh yaratuvchisini chetlatib bo\'lmaydi', 403);
   }
 
+  // Get user info for system message
+  const targetUser = await prisma.user.findUnique({ where: { id: targetUserId }, select: { fullname: true } });
+
   await prisma.chatParticipant.delete({
     where: { id: target.id }
   });
+
+  // System message
+  await chatService.sendSystemEvent(chatRoomId, `👋 ${targetUser?.fullname || 'Foydalanuvchi'} guruhdan chiqarildi.`);
+
+  // Socket notify
+  try {
+    const io = getIO();
+    io.to(`chat_${chatRoomId}`).emit('participant_removed', { chatRoomId, userId: targetUserId });
+  } catch (err) {}
 
   return true;
 }
@@ -216,7 +228,7 @@ async function removeParticipant(chatRoomId, requesterId, targetUserId) {
 async function leaveGroup(chatRoomId, userId) {
   const participant = await prisma.chatParticipant.findUnique({
     where: { chatRoomId_userId: { chatRoomId, userId } },
-    include: { chatRoom: true }
+    include: { chatRoom: true, user: { select: { fullname: true } } }
   });
 
   if (!participant) throw new AppError('Siz guruh a\'zosi emassiz', 404);
@@ -239,6 +251,14 @@ async function leaveGroup(chatRoomId, userId) {
     await prisma.chatRoom.delete({ where: { id: chatRoomId } });
     return true;
   }
+
+  // System message and socket notify if room still exists
+  await chatService.sendSystemEvent(chatRoomId, `👋 ${participant.user.fullname} guruhni tark etdi.`);
+  
+  try {
+    const io = getIO();
+    io.to(`chat_${chatRoomId}`).emit('participant_removed', { chatRoomId, userId });
+  } catch (err) {}
 
   // Agar chiqib ketgan odam OWNER bo'lsa, boshqa birovga OWNER berish kerak
   if (participant.role === 'OWNER') {
@@ -376,9 +396,15 @@ async function updateAdvancedGroupSettings(chatRoomId, requesterId, settings) {
 
 // Username yoki ism bo'yicha foydalanuvchilarni izlash
 async function searchUsersForInvite(query, chatRoomId) {
-  if (!query || query.length < 3) {
+  if (!query || query.length < 2) {
     return [];
   }
+
+  // @ bilan boshlansa faqat username bo'yicha qidiramiz
+  const isUsernameSearch = query.startsWith('@');
+  const cleanQuery = isUsernameSearch ? query.substring(1) : query;
+
+  if (cleanQuery.length < 2) return [];
 
   // Shu guruhda allaqachon bor odamlarni topamiz
   let excludeIds = [];
@@ -397,15 +423,16 @@ async function searchUsersForInvite(query, chatRoomId) {
         { isBanned: false },
         { deletedAt: null },
         {
-          OR: [
-            { fullname: { contains: query, mode: 'insensitive' } },
-            // Agar User modelida username bo'lsa, bu yerga yoziladi.
-            // Hozirgi modelda fullname bor, shu bo'yicha qidiramiz
+          OR: isUsernameSearch ? [
+            { username: { contains: cleanQuery, mode: 'insensitive' } }
+          ] : [
+            { fullname: { contains: cleanQuery, mode: 'insensitive' } },
+            { username: { contains: cleanQuery, mode: 'insensitive' } }
           ]
         }
       ]
     },
-    select: { id: true, fullname: true, avatarUrl: true },
+    select: { id: true, fullname: true, username: true, avatarUrl: true },
     take: 10
   });
 
@@ -480,7 +507,7 @@ async function acceptInvite(inviteId, userId) {
   }
 
   // Statusni yangilash va Participant qilib qo'shish
-  await prisma.$transaction([
+  const [updatedInvite, newParticipant] = await prisma.$transaction([
     prisma.chatInvite.update({
       where: { id: inviteId },
       data: { status: 'ACCEPTED', resolvedAt: new Date() }
@@ -490,9 +517,26 @@ async function acceptInvite(inviteId, userId) {
         chatRoomId: invite.chatRoomId,
         userId: userId,
         role: 'MEMBER'
+      },
+      include: {
+        user: {
+          select: { id: true, fullname: true, username: true, avatarUrl: true }
+        }
       }
     })
   ]);
+
+  // Tizim xabari yuboramiz
+  await chatService.sendSystemEvent(invite.chatRoomId, `👋 ${newParticipant.user.fullname} guruhga qo'shildi.`);
+
+  // Real-time bildirishnoma
+  try {
+    const io = getIO();
+    io.to(`chat_${invite.chatRoomId}`).emit('participant_added', { 
+      chatRoomId: invite.chatRoomId, 
+      participant: newParticipant 
+    });
+  } catch (err) {}
 
   return { chatRoomId: invite.chatRoomId };
 }

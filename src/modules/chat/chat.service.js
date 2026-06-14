@@ -90,13 +90,30 @@ async function sendMessage(chatRoomId, senderId, data) {
   // 2. Emit to Socket immediately for real-time feel
   try {
     const io = getIO();
-    io.to(`chat_${chatRoomId}`).emit('new_message', message);
+    const roomName = `chat_${chatRoomId}`;
+    
+    // Emit to the room for those who are actively looking at it
+    io.to(roomName).emit('new_message', message);
+    
+    // Emit to each participant's personal room for sidebar/notification updates
+    const participants = await prisma.chatParticipant.findMany({
+      where: { chatRoomId },
+      select: { userId: true }
+    });
+
+    participants.forEach(p => {
+      io.to(`user_${p.userId}`).emit('new_message', message);
+    });
+
   } catch (err) {
     logger.error(`Socket emit failed: ${err.message}`);
   }
 
   // 3. Add side-effects to BullMQ (Offline Notifications, analytics, etc)
   try {
+    // We already have participants from the socket emit logic above, 
+    // but we'll fetch them again if needed or pass them down.
+    // For simplicity and to avoid race conditions, we'll just use the already fetched participants.
     const participants = await prisma.chatParticipant.findMany({
       where: { chatRoomId },
       select: { userId: true }

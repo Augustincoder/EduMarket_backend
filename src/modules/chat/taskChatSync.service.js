@@ -1,5 +1,6 @@
 const prisma = require('../../config/prisma');
 const chatService = require('./chat.service');
+const { getIO } = require('../../config/socket');
 const logger = require('../../utils/logger');
 
 /**
@@ -43,24 +44,49 @@ async function syncTaskRoomParticipants(taskId) {
     for (const [userId, role] of desired) {
       const isAlreadyIn = currentParticipants.find(p => p.userId === userId);
       if (!isAlreadyIn) {
-        await prisma.chatParticipant.create({
-          data: { chatRoomId: room.id, userId, role }
+        const p = await prisma.chatParticipant.create({
+          data: { chatRoomId: room.id, userId, role },
+          include: { user: { select: { id: true, fullname: true, username: true, avatarUrl: true } } }
         });
-        await chatService.sendSystemEvent(room.id, `👋 Foydalanuvchi guruhga qo'shildi.`);
+        await chatService.sendSystemEvent(room.id, `👋 ${p.user.fullname} guruhga qo'shildi.`);
+
+        // Emit event to update UI in real-time
+        try {
+          const io = getIO();
+          io.to(`chat_${room.id}`).emit('participant_added', { chatRoomId: room.id, participant: p });
+        } catch (e) {}
       } else if (isAlreadyIn.role !== role) {
         // Update role if needed (e.g. if someone becomes lead freelancer)
-        await prisma.chatParticipant.update({
+        const updated = await prisma.chatParticipant.update({
           where: { id: isAlreadyIn.id },
-          data: { role }
+          data: { role },
+          include: { user: { select: { id: true, fullname: true, username: true, avatarUrl: true } } }
         });
+
+        // Emit for role change
+        try {
+          const io = getIO();
+          io.to(`chat_${room.id}`).emit('participant_updated', { chatRoomId: room.id, participant: updated });
+        } catch (e) {}
       }
     }
 
     // 2. Remove participants who are no longer part of the task
     for (const p of currentParticipants) {
       if (!desired.has(p.userId)) {
+        const participantWithUser = await prisma.chatParticipant.findUnique({
+          where: { id: p.id },
+          include: { user: { select: { fullname: true } } }
+        });
+
         await prisma.chatParticipant.delete({ where: { id: p.id } });
-        await chatService.sendSystemEvent(room.id, `👋 Foydalanuvchi guruhdan chiqarildi (vazifa tarkibi o'zgardi).`);
+        await chatService.sendSystemEvent(room.id, `👋 ${participantWithUser?.user?.fullname || 'Foydalanuvchi'} guruhdan chiqarildi (vazifa tarkibi o'zgardi).`);
+
+        // Emit event for real-time UI
+        try {
+          const io = getIO();
+          io.to(`chat_${room.id}`).emit('participant_removed', { chatRoomId: room.id, userId: p.userId });
+        } catch (e) {}
       }
     }
   } catch (err) {
